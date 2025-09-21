@@ -22,7 +22,7 @@ export async function fetchDue(batchSize: number): Promise<DueRow[]> {
     .select('contact_email_nk,email,followup_count,responded,last_email_date,open_token')
     .eq('responded', false)
     .lt('followup_count', MAXF)
-    .or(`last_email_date.is.null,last_email_date.lte.${daysAgoISO(DAYS)}`)
+    
     .order('last_email_date', { ascending: true, nullsFirst: true })
     .limit(batchSize);
 
