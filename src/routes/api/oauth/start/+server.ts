@@ -3,7 +3,8 @@ import { makeOauthClient } from '$lib/google-oauth';
 import crypto from 'node:crypto';
 
 const SCOPES = [
-  'https://www.googleapis.com/auth/gmail.compose'
+  'https://www.googleapis.com/auth/gmail.compose',
+  'https://www.googleapis.com/auth/gmail.readonly'
 
 ];
 
