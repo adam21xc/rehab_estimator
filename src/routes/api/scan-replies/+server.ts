@@ -2,7 +2,7 @@
 import type { RequestHandler } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import { supabaseAdmin, markReplied } from '$lib/supabase';
-import { getThread, getMyAddresses } from '$lib/gmail';
+import { getThread } from '$lib/gmail';
 
 function parseHeader(h: { name?: string; value?: string }[], name: string) {
   return h.find((x) => x.name?.toLowerCase() === name.toLowerCase())?.value || '';
@@ -53,7 +53,7 @@ export const POST: RequestHandler = async ({ url, request }) => {
     });
   }
 
-  const myAddrs = await getMyAddresses();
+  // const myAddrs = await getMyAddresses();
   let updated = 0;
   const matched: string[] = [];
   const scanned = rows?.length ?? 0;
@@ -71,7 +71,7 @@ export const POST: RequestHandler = async ({ url, request }) => {
         const subject = parseHeader(hdrs, 'Subject') || '';
         const internalDate = m.internalDate ? new Date(Number(m.internalDate)) : undefined;
 
-        if (myAddrs.has(from)) return false; // skip our own messages
+        // if (myAddrs.has(from)) return false; // skip our own messages
         if (lastSent && internalDate && internalDate <= lastSent) return false; // only messages after our send
         if (isAutoReplyLike(subject, (m as any).raw)) return false;
 

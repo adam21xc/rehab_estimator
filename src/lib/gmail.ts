@@ -132,16 +132,16 @@ export async function sendGmail(opts: {
   return res.data; // { id, threadId, ... }
 }
 
-export async function getMyAddresses(): Promise<Set<string>> {
-  // If you maintain aliases, load them from env:
-  const bases = (env.GMAIL_ALIASES || '')
-    .split(',')
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-  // Also include FROM_EMAIL if present
-  if (env.FROM_EMAIL) bases.push(env.FROM_EMAIL.toLowerCase());
-  return new Set(bases);
-}
+// export async function getMyAddresses(): Promise<Set<string>> {
+//   // If you maintain aliases, load them from env:
+//   const bases = (env.GMAIL_ALIASES || '')
+//     .split(',')
+//     .map((s) => s.trim().toLowerCase())
+//     .filter(Boolean);
+//   // Also include FROM_EMAIL if present
+//   if (env.FROM_EMAIL) bases.push(env.FROM_EMAIL.toLowerCase());
+//   return new Set(bases);
+// }
 
 // Minimal thread fetch using Gmail API
 export async function getThread(threadId: string) {
