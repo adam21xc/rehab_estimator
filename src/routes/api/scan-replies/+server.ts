@@ -71,13 +71,13 @@ export const POST: RequestHandler = async ({ url, request }) => {
   // Load candidates
   let q = supabaseAdmin
     .from('emails_table')
-    .select('contact_email_nk, email, thread_id, last_email_date, responded')
+    .select('contact_email_prop_nk, email, thread_id, last_email_date, responded')
     .eq('responded', false)
     .not('thread_id', 'is', null)
     .order('last_email_date', { ascending: true })
     .limit(limit);
 
-  if (filterNk) q = q.eq('contact_email_nk', filterNk);
+  if (filterNk) q = q.eq('contact_email_prop_nk', filterNk);
 
   const { data: rows, error } = await q;
   if (error) {
@@ -94,7 +94,7 @@ export const POST: RequestHandler = async ({ url, request }) => {
   const details: Array<{ nk: string; msgs: Array<{ from: string; date?: string; used: boolean; reason?: string }> }> = [];
 
   for (const r of rows ?? []) {
-    const nk = r.contact_email_nk as string;
+    const nk = r.contact_email_prop_nk as string;
     const lastSent = r.last_email_date ? new Date(r.last_email_date as string) : null;
     const cutoff = lastSent ? new Date(lastSent.getTime() - FIVE_MIN_MS) : null; // buffer 5 min
     let gotReply = false;
@@ -147,7 +147,7 @@ export const POST: RequestHandler = async ({ url, request }) => {
         const { error: updErr } = await supabaseAdmin
           .from('emails_table')
           .update({ responded: true, response_date: new Date().toISOString() })
-          .eq('contact_email_nk', nk);
+          .eq('contact_email_prop_nk', nk);
         if (!updErr) updated++;
       }
     }

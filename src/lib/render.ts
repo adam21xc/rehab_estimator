@@ -31,7 +31,7 @@ export function getPixelUrl(token: string, nk?: string, cacheBust = false) {
 
 /**
  * Render subject/text/html. If openToken is provided, appends a 1x1 pixel <img>.
- * Pass `nk` (contact_email_nk) if you want richer server logs/analytics.
+ * Pass `nk` (contact_email_prop_nk) if you want richer server logs/analytics.
  */
 export function renderEmail(rv: RowView, stage: number, openToken?: string, nk?: string) {
   const tpl = getTemplate(stage);

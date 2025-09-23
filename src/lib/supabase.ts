@@ -20,6 +20,6 @@ export async function markReplied(nk: string) {
   const { error } = await supabaseAdmin
     .from('emails_table')
     .update({ responded: true, response_date: new Date().toISOString() })
-    .eq('contact_email_nk', nk);
+    .eq('contact_email_prop_nk', nk);
   if (error) throw error;
 }

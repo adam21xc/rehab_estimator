@@ -45,7 +45,7 @@ export const POST: RequestHandler = async ({ url, request }) => {
     try {
       const to = row.email;
       if (!isEmailish(to)) {
-        errors.push({ nk: row.contact_email_nk, to, error: 'invalid or missing email' });
+        errors.push({ nk: row.contact_email_prop_nk, to, error: 'invalid or missing email' });
         continue;
       }
 
@@ -66,7 +66,7 @@ export const POST: RequestHandler = async ({ url, request }) => {
       const { subject, html, text } = renderEmail(rv, stage, row.open_token ?? undefined);
 
       if (dry) {
-        previews.push({ nk: row.contact_email_nk, to, stage, subject });
+        previews.push({ nk: row.contact_email_prop_nk, to, stage, subject });
         continue;
       }
 
@@ -77,9 +77,9 @@ export const POST: RequestHandler = async ({ url, request }) => {
         text
       });
 
-      await bumpFollowup(row.contact_email_nk, threadId);
+      await bumpFollowup(row.contact_email_prop_nk, threadId);
       sent++;
-      sentSummaries.push({ nk: row.contact_email_nk, to, threadId });
+      sentSummaries.push({ nk: row.contact_email_prop_nk, to, threadId });
 
       // small throttling to avoid hammering the API
       if (SEND_DELAY_MS > 0) {
@@ -87,7 +87,7 @@ export const POST: RequestHandler = async ({ url, request }) => {
       }
     } catch (e: any) {
       errors.push({
-        nk: row.contact_email_nk,
+        nk: row.contact_email_prop_nk,
         to: row.email,
         error: e?.message ?? String(e)
       });

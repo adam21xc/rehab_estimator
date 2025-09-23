@@ -4,7 +4,7 @@ export const DAYS_BETWEEN_FOLLOWUPS = Number(process.env.DAYS_BETWEEN_FOLLOWUPS 
 export const MAX_FOLLOWUPS = Number(process.env.MAX_FOLLOWUPS ?? 10);
 
 export type DueRow = {
-  contact_email_nk: string;
+  contact_email_prop_nk: string;
   contact_id: string;
   associated_property_id: string | null;
   email: string;
@@ -34,7 +34,7 @@ export async function fetchDue(batchSize: number): Promise<DueRow[]> {
   const { data, error } = await supabaseAdmin
     .from('emails_table')
     .select(`
-      contact_email_nk,
+      contact_email_prop_nk,
       contact_id,
       associated_property_id,
       email,
