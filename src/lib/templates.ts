@@ -1,6 +1,6 @@
 export type RowView = {
   first?: string | null;
-  a1?: string | null;
+  short_address?: string | null;
   fullAddress?: string | null;
 };
 
@@ -10,8 +10,8 @@ type Template = {
 };
 
 const hi = (name?: string | null) => `Hi ${name?.trim()},`;
-const a1  = (rv: RowView) => rv.a1?.trim();
-const addr= (rv: RowView) => rv.fullAddress?.trim();
+const short_address  = (rv: RowView) => rv.short_address?.trim();
+// const addr= (rv: RowView) => rv.fullAddress?.trim();
 
 export const TEMPLATES: Template[] = [
   // Stage 0 — initial
@@ -19,7 +19,7 @@ export const TEMPLATES: Template[] = [
     subject: (_rv) => `Quick question about your property`,
     paragraphs: (rv) => [
       hi(rv.first),
-      `I came across public records showing there may be unpaid property taxes for ${addr(rv)}.`,
+      `I came across public records showing there may be unpaid property taxes for ${short_address(rv)}.`,
       `I help owners explore options to resolve this—selling, partnering, or other solutions—depending on your goals and timeline.`,
       `Would you be open to a quick 10-minute chat?`,
       `Best,\nAdam\n 317-572-7840`
@@ -27,17 +27,17 @@ export const TEMPLATES: Template[] = [
   },
   // Stage 1 — check in
   {
-    subject: (rv) => `Checking in about ${a1(rv)}`,
+    subject: (rv) => `Checking in about ${short_address(rv)}`,
     paragraphs: (rv) => [
       hi(rv.first),
-      `Following up on my note about ${addr(rv)}.`,
+      `Following up on my note about ${short_address(rv)}.`,
       `The earlier you review options on tax issues, the more flexibility you typically have.`,
       `Could we find 10 minutes this week?`
     ]
   },
   // Stage 2 — educate (timeline)
   {
-    subject: (rv) => `Tax timeline on ${a1(rv)}`,
+    subject: (rv) => `Tax timeline on ${short_address(rv)}`,
     paragraphs: (rv) => [
       hi(rv.first),
       `Quick heads-up: properties with unpaid taxes can move toward tax sale. That can put equity at risk if not addressed.`,
@@ -47,7 +47,7 @@ export const TEMPLATES: Template[] = [
   },
   // Stage 3 — offer resources
   {
-    subject: (rv) => `Helpful options for ${a1(rv)}`,
+    subject: (rv) => `Helpful options for ${short_address(rv)}`,
     paragraphs: (rv) => [
       hi(rv.first),
       `I can send you a short checklist owners use to get ahead of tax deadlines and preserve options.`,
@@ -56,7 +56,7 @@ export const TEMPLATES: Template[] = [
   },
   // Stage 4
   {
-    subject: (rv) => `Still here to help with ${a1(rv)}`,
+    subject: (rv) => `Still here to help with ${short_address(rv)}`,
     paragraphs: (rv) => [
       hi(rv.first),
       `Just checking in—happy to be a resource even if you’re not ready to decide yet.`,
@@ -65,7 +65,7 @@ export const TEMPLATES: Template[] = [
   },
   // Stage 5
   {
-    subject: (rv) => `Quick nudge on ${a1(rv)}`,
+    subject: (rv) => `Quick nudge on ${short_address(rv)}`,
     paragraphs: (rv) => [
       hi(rv.first),
       `If timing isn’t great, no worries. If a quick call next week is better, I’ll make it easy.`

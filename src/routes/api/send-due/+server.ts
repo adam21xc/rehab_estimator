@@ -55,7 +55,7 @@ export const POST: RequestHandler = async ({ url, request }) => {
       // Build rowView from joined lead context (no duplication in emails_table)
       const rv = {
         first: row.lead?.first_name ?? undefined,
-        a1: row.lead?.associated_property_address_line_1 ?? undefined,
+        short_address: row.lead?.associated_property_address_line_1 ?? undefined,
         fullAddress: row.lead?.associated_property_address_full ?? undefined,
         // optional: pass through leadSource for template anecdotes
         leadSource: row.lead?.lead_source ?? row.lead_source ?? undefined
