@@ -9,9 +9,9 @@ type Template = {
   paragraphs: (rv: RowView) => string[];
 };
 
-const hi = (name?: string | null) => `Hi ${name?.trim() || 'there'},`;
-const a1  = (rv: RowView) => rv.a1?.trim() || 'your property';
-const addr= (rv: RowView) => rv.fullAddress?.trim() || 'your property';
+const hi = (name?: string | null) => `Hi ${name?.trim()},`;
+const a1  = (rv: RowView) => rv.a1?.trim();
+const addr= (rv: RowView) => rv.fullAddress?.trim();
 
 export const TEMPLATES: Template[] = [
   // Stage 0 — initial

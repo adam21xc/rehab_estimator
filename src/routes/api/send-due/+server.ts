@@ -52,12 +52,16 @@ export const POST: RequestHandler = async ({ url, request }) => {
       // Stage: 0 for first send, otherwise equal to followups already sent
       const stage = row.last_email_date ? row.followup_count : 0;
 
-      // Build rowView (extend this when you store more fields in emails_table)
+      // Build rowView from joined lead context (no duplication in emails_table)
       const rv = {
-        first: row.first_name ?? undefined,
-        a1: row.associated_property_address_line_1 ?? undefined,
-        fullAddress: row.associated_property_address_full ?? undefined
+        first: row.lead?.first_name ?? undefined,
+        a1: row.lead?.associated_property_address_line_1 ?? undefined,
+        fullAddress: row.lead?.associated_property_address_full ?? undefined,
+        // optional: pass through leadSource for template anecdotes
+        leadSource: row.lead?.lead_source ?? row.lead_source ?? undefined
       } as any;
+
+      console.log(rv, 'before renderEmail');
 
       const { subject, html, text } = renderEmail(rv, stage, row.open_token ?? undefined);
 
