@@ -1,7 +1,8 @@
 name: Accela hourly import
 on:
   schedule:
-    - cron: '17 * * * *'
+    # Covers 7 a.m.–7 p.m. Pacific across PST/PDT; the gate handles DST.
+    - cron: '17 0-2,14-23 * * *'
   workflow_dispatch:
     inputs:
       start:
@@ -24,10 +25,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 50
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Check Pacific operating hours
+        id: hours
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        shell: bash
+        run: |
+          hour=$(TZ=America/Los_Angeles date +%H)
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]] || (( 10#$hour >= 7 && 10#$hour < 19 )); then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Outside 7 a.m.–7 p.m. Pacific; skipping automatic import."
+          fi
+      - if: steps.hours.outputs.enabled == 'true'
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Test parser
+        if: steps.hours.outputs.enabled == 'true'
         run: python3 -m unittest discover -s tests/accela -v
       - name: Import cases
+        if: steps.hours.outputs.enabled == 'true'
         env:
           SUPABASE_URL: ${{ secrets.ACCELA_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.ACCELA_SUPABASE_SERVICE_ROLE_KEY }}
