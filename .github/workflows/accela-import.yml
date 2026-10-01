@@ -1,8 +1,8 @@
 name: Accela hourly import
 on:
   schedule:
-    # Covers 7 a.m.–7 p.m. Pacific across PST/PDT; the gate handles DST.
-    - cron: '17 0-2,14-23 * * *'
+    # Covers 7 a.m.–7 p.m. Eastern across EST/EDT; the gate handles DST.
+    - cron: '17 11-23 * * *'
   workflow_dispatch:
     inputs:
       start:
@@ -25,18 +25,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 50
     steps:
-      - name: Check Pacific operating hours
+      - name: Check Eastern operating hours
         id: hours
         env:
           EVENT_NAME: ${{ github.event_name }}
         shell: bash
         run: |
-          hour=$(TZ=America/Los_Angeles date +%H)
+          hour=$(TZ=America/Indiana/Indianapolis date +%H)
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]] || (( 10#$hour >= 7 && 10#$hour < 19 )); then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "Outside 7 a.m.–7 p.m. Pacific; skipping automatic import."
+            echo "Outside 7 a.m.–7 p.m. Eastern; skipping automatic import."
           fi
       - if: steps.hours.outputs.enabled == 'true'
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2

@@ -26,7 +26,7 @@ are committed or printed in workflow logs. This does not create outreach permiss
 ## Schedule and bounded work
 
 The GitHub Actions workflow imports at minute 17 of each hour from 7 a.m. through
-6 p.m. America/Los_Angeles, on a hosted runner. A local-time gate handles daylight
+6 p.m. America/Indiana/Indianapolis, on a hosted runner. A local-time gate handles daylight
 saving changes and skips automatic runs starting at or after 7 p.m. or before
 7 a.m. Manual dispatch bypasses this window for testing/backfills. An import
 already in progress may finish after the cutoff; its maximum duration is 50 minutes.
