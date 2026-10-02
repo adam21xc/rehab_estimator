@@ -66,8 +66,7 @@ the email send script sends real messages and is not part of `npm test`.
 
 ## Current implementation boundaries
 
-The lead and sales pages are read-only views, not a finished CRM pipeline. MyCase
-is not connected to these views yet. The current sales snapshot has sale dates
+The lead and sales pages are read-only views, not a finished CRM pipeline. MyCase is connected through the existing scraper’s `indiana_cases` table. The current sales snapshot has sale dates
 through July 31, 2026 and is not refreshed by a scheduled worker. To refresh manually,
 run `python3 scripts/sales/fetch.py`, then `node scripts/sales/import.mjs`. A normal
 fetch starts fresh; use `python3 scripts/sales/fetch.py --resume` only for an
@@ -313,3 +312,37 @@ Official Twilio references:
 
 - https://www.twilio.com/docs/messaging/api/message-resource
 - https://www.twilio.com/docs/usage/webhooks/webhooks-security
+
+## MyCase lead inbox
+
+On `/leads`, select **MyCase court leads**. The authorized server endpoints
+`/api/rehab/mycase` and `/api/rehab/mycase/[id]` read the same `indiana_cases`
+table written by the separate `mycase-scraper` project. No copy/backfill or second
+source table is needed: successful scraper upserts appear on the next CRM refresh.
+The scraper must continue pointing at the same Supabase project using its existing
+`SUPABASE_URL` and server-only `SUPABASE_SERVICE_ROLE` configuration.
+
+The inbox includes mortgage foreclosures (MF), unsupervised estates (EU), and
+evictions (EVSC/EVCD), with county, type, name/address/case search, date sorting,
+and pagination. Unrelated case types are excluded from both list and detail routes.
+Dates are parsed from the legacy MM/DD/YYYY text before sorting. The current small
+dataset is read in 1,000-row batches before filtering/pagination; at larger scale,
+add an indexed normalized filing-date column to the source schema.
+
+Party mailing addresses are not verified subject-property addresses. Case status
+is a court source status, not an acquisition pipeline stage. The case dialog shows
+stored parties and a link to MyCase search; source tokens and raw payloads are not
+exposed. The last stored update is shown explicitly. The inbox shows the latest stored update; its count grows as the scraper imports new cases.
+
+Fresh scraping runs separately in the `adam21xc/mycase-scraper` GitHub repository:
+its **MyCase daily import** workflow is scheduled for 8:17 a.m. Eastern, using
+Browserless and writing directly to this database. It checks the existing 14
+foreclosure/estate/eviction court prefixes in Marion, Hendricks, and Tippecanoe
+counties for the current and previous month. This is not every court in those
+counties and does not backfill older missing months. GitHub scheduling can be delayed;
+a scheduled run delayed past 7 p.m. Eastern is skipped. Manual dispatch is available.
+No Mac Mini cron is required. Review GitHub Actions for failures and run summaries;
+refreshing this inbox only reads the latest database records.
+
+Run `node scripts/test-crm-live.mjs` for live read/auth checks using a temporary user;
+source records are never modified by that verification.

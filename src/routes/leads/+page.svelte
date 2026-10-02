@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import MyCaseInbox from '$lib/components/MyCaseInbox.svelte';
+	let source = $state('accela');
 	import { resolve } from '$app/paths';
 	type Party = { display_name: string; raw_lines: string[]; phones: string[]; emails: string[] };
 	type Lead = {
@@ -178,7 +180,7 @@
 				<h1>Your next opportunity.</h1>
 				<p class="muted">Local signals. Real properties. One place to start.</p>
 			</div>
-			<span class="source"><i></i> Indianapolis · Accela</span>
+			<span class="source"><i></i> Accela · Indiana MyCase</span>
 		</div>
 		{#if problem}<div class="notice error" role="alert">
 				{problem}{#if signedIn}<button onclick={() => load(page)}>Retry</button>{/if}
@@ -216,137 +218,153 @@
 				>{#if message}<p role="status">{message}</p>{/if}
 			</section>
 		{:else}
-			<section class="metrics" aria-label="Import overview">
-				<div>
-					<span>Imported cases</span><strong>{stats.total.toLocaleString()}</strong><small
-						>Accela source records</small
-					>
-				</div>
-				<div>
-					<span>Details available</span><strong>{stats.ready.toLocaleString()}</strong><small
-						>Ready for your review</small
-					>
-				</div>
-				<div>
-					<span>Awaiting details</span><strong
-						>{(stats.total - stats.ready).toLocaleString()}</strong
-					><small>{stats.retry} cases scheduled for retry</small>
-				</div>
-			</section>
-			<section class="inbox">
-				<div class="section-heading">
-					<div>
-						<p class="eyebrow">01 / SOURCE INBOX</p>
-						<h2>Code violation leads <span>{count}</span></h2>
-					</div>
-					<button disabled={busy} onclick={() => load(page)}
-						>{busy ? 'Refreshing…' : '↻ Refresh'}</button
-					>
-				</div>
-				<p class="context">
-					Each row is a case, so a property may appear more than once. Case status comes from
-					Accela. {stats.ready} of {stats.total} cases have full details; {stats.total -
-						stats.ready} have summaries awaiting their detail fetch.
-					{#if coverage?.firstFiled}
-						Imported cases were filed {coverage.firstFiled} through {coverage.lastFiled}. This is
-						the imported coverage, not all historical Accela cases.{/if}
-				</p>
-				<form
-					class="filters"
-					onsubmit={(e) => {
-						e.preventDefault();
-						load();
-					}}
+			<div class="source-tabs" role="tablist" aria-label="Lead source">
+				<button role="tab" aria-selected={source === 'accela'} onclick={() => (source = 'accela')}
+					>Code violations</button
+				><button role="tab" aria-selected={source === 'mycase'} onclick={() => (source = 'mycase')}
+					>MyCase court leads</button
 				>
-					<label class="search"
-						>Search leads<input placeholder="Street address or case number" bind:value={q} /></label
-					><label
-						>Case status<select bind:value={status}
-							><option value="">All statuses</option><option value="active">Active cases</option
-							><option value="closed">Closed cases</option><option value="void">Void</option
-							></select
-						></label
-					><label
-						>Details<select bind:value={readiness}
-							><option value="">All cases</option><option value="ready">Available</option><option
-								value="pending">Awaiting details</option
-							><option value="retry">Retry scheduled</option></select
-						></label
-					><label
-						>Sort<select bind:value={sort}
-							><option value="newest">Newest first</option><option value="oldest"
-								>Oldest first</option
-							></select
-						></label
-					><button class="primary" disabled={busy}>Apply</button>
-				</form>
-				<div class="table-wrap" aria-busy={busy}>
-					<table>
-						<thead
-							><tr
-								><th>Property / case</th><th>Violation type</th><th>Case status</th><th>Owner</th
-								><th>Filed</th><th>Details</th></tr
-							></thead
-						>
-						<tbody
-							>{#each leads as lead (lead.case_number)}<tr>
-									<td
-										><button class="address" onclick={() => openCase(lead)}
-											>{lead.address || 'Address not listed'}</button
-										><small>{lead.case_number}</small></td
-									>
-									<td data-label="Violation type">{lead.case_type || 'Not listed'}</td>
-									<td data-label="Case status"
-										><span class:closed={lead.record_status?.startsWith('Closed')} class="badge"
-											>{lead.record_status}</span
-										></td
-									>
-									<td data-label="Owner"
-										>{lead.detail_checked_at ? names(lead.owners) : 'Awaiting details'}</td
-									>
-									<td data-label="Filed" class="date">{date(lead.filed_date)}</td>
-									<td data-label="Details"
-										><span class="detail-status" class:ready={!!lead.detail_checked_at}
-											>{lead.detail_failures
-												? 'Retry scheduled'
-												: lead.detail_checked_at
-													? 'Available'
-													: 'Summary only'}</span
-										></td
-									>
-								</tr>{/each}</tbody
-						>
-					</table>
-					{#if !leads.length}<div class="empty">
-							<h3>{busy ? 'Loading leads…' : 'No cases match this view.'}</h3>
-							<p>
-								{busy
-									? 'Fetching your latest imported records.'
-									: 'Try a different address or remove a filter.'}
-							</p>
-						</div>{/if}
-				</div>
-				<footer class="pagination">
-					<span
-						>{count
-							? `${(page - 1) * 25 + 1}–${Math.min(page * 25, count)} of ${count}`
-							: '0 cases'}</span
-					>
+			</div>
+			{#if source === 'mycase'}<MyCaseInbox
+					onUnauthorized={() => {
+						signedIn = false;
+					}}
+				/>{:else}
+				<section class="metrics" aria-label="Import overview">
 					<div>
-						<button disabled={busy || page <= 1} onclick={() => load(page - 1)}>← Previous</button
-						><button disabled={busy || page * 25 >= count} onclick={() => load(page + 1)}
-							>Next →</button
+						<span>Imported cases</span><strong>{stats.total.toLocaleString()}</strong><small
+							>Accela source records</small
 						>
 					</div>
-				</footer>
-			</section>
-			<div class="footnote">
-				<span
-					>Latest import: {lastRun
-						? `${lastRun.status} · ${new Date(lastRun.started_at).toLocaleString()}`
-						: 'No runs yet'}</span
-				><span>MyCase & skip tracing · not connected yet</span>
-			</div>
+					<div>
+						<span>Details available</span><strong>{stats.ready.toLocaleString()}</strong><small
+							>Ready for your review</small
+						>
+					</div>
+					<div>
+						<span>Awaiting details</span><strong
+							>{(stats.total - stats.ready).toLocaleString()}</strong
+						><small>{stats.retry} cases scheduled for retry</small>
+					</div>
+				</section>
+				<section class="inbox">
+					<div class="section-heading">
+						<div>
+							<p class="eyebrow">01 / SOURCE INBOX</p>
+							<h2>Code violation leads <span>{count}</span></h2>
+						</div>
+						<button disabled={busy} onclick={() => load(page)}
+							>{busy ? 'Refreshing…' : '↻ Refresh'}</button
+						>
+					</div>
+					<p class="context">
+						Each row is a case, so a property may appear more than once. Case status comes from
+						Accela. {stats.ready} of {stats.total} cases have full details; {stats.total -
+							stats.ready} have summaries awaiting their detail fetch.
+						{#if coverage?.firstFiled}
+							Imported cases were filed {coverage.firstFiled} through {coverage.lastFiled}. This is
+							the imported coverage, not all historical Accela cases.{/if}
+					</p>
+					<form
+						class="filters"
+						onsubmit={(e) => {
+							e.preventDefault();
+							load();
+						}}
+					>
+						<label class="search"
+							>Search leads<input
+								placeholder="Street address or case number"
+								bind:value={q}
+							/></label
+						><label
+							>Case status<select bind:value={status}
+								><option value="">All statuses</option><option value="active">Active cases</option
+								><option value="closed">Closed cases</option><option value="void">Void</option
+								></select
+							></label
+						><label
+							>Details<select bind:value={readiness}
+								><option value="">All cases</option><option value="ready">Available</option><option
+									value="pending">Awaiting details</option
+								><option value="retry">Retry scheduled</option></select
+							></label
+						><label
+							>Sort<select bind:value={sort}
+								><option value="newest">Newest first</option><option value="oldest"
+									>Oldest first</option
+								></select
+							></label
+						><button class="primary" disabled={busy}>Apply</button>
+					</form>
+					<div class="table-wrap" aria-busy={busy}>
+						<table>
+							<thead
+								><tr
+									><th>Property / case</th><th>Violation type</th><th>Case status</th><th>Owner</th
+									><th>Filed</th><th>Details</th></tr
+								></thead
+							>
+							<tbody
+								>{#each leads as lead (lead.case_number)}<tr>
+										<td
+											><button class="address" onclick={() => openCase(lead)}
+												>{lead.address || 'Address not listed'}</button
+											><small>{lead.case_number}</small></td
+										>
+										<td data-label="Violation type">{lead.case_type || 'Not listed'}</td>
+										<td data-label="Case status"
+											><span class:closed={lead.record_status?.startsWith('Closed')} class="badge"
+												>{lead.record_status}</span
+											></td
+										>
+										<td data-label="Owner"
+											>{lead.detail_checked_at ? names(lead.owners) : 'Awaiting details'}</td
+										>
+										<td data-label="Filed" class="date">{date(lead.filed_date)}</td>
+										<td data-label="Details"
+											><span class="detail-status" class:ready={!!lead.detail_checked_at}
+												>{lead.detail_failures
+													? 'Retry scheduled'
+													: lead.detail_checked_at
+														? 'Available'
+														: 'Summary only'}</span
+											></td
+										>
+									</tr>{/each}</tbody
+							>
+						</table>
+						{#if !leads.length}<div class="empty">
+								<h3>{busy ? 'Loading leads…' : 'No cases match this view.'}</h3>
+								<p>
+									{busy
+										? 'Fetching your latest imported records.'
+										: 'Try a different address or remove a filter.'}
+								</p>
+							</div>{/if}
+					</div>
+					<footer class="pagination">
+						<span
+							>{count
+								? `${(page - 1) * 25 + 1}–${Math.min(page * 25, count)} of ${count}`
+								: '0 cases'}</span
+						>
+						<div>
+							<button disabled={busy || page <= 1} onclick={() => load(page - 1)}>← Previous</button
+							><button disabled={busy || page * 25 >= count} onclick={() => load(page + 1)}
+								>Next →</button
+							>
+						</div>
+					</footer>
+				</section>
+				<div class="footnote">
+					<span
+						>Latest import: {lastRun
+							? `${lastRun.status} · ${new Date(lastRun.started_at).toLocaleString()}`
+							: 'No runs yet'}</span
+					><span>Skip tracing · not connected yet</span>
+				</div>
+			{/if}
 		{/if}
 	</main>
 </div>
@@ -420,6 +438,15 @@
 </dialog>
 
 <style>
+	.source-tabs {
+		display: flex;
+		gap: 12px;
+		margin: 20px 0;
+	}
+	.source-tabs [aria-selected='true'] {
+		border-color: #ff897b;
+		color: #ff897b;
+	}
 	.crm {
 		min-height: 100vh;
 		background: #101113;

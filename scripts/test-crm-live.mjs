@@ -47,8 +47,30 @@ try {
 	const item = await (await detail.GET(event('', first.leads[0].case_number))).json();
 	assert.equal(item.lead.case_number, first.leads[0].case_number);
 	await assert.rejects(detail.GET(event('', 'NONEXISTENT-CASE')), (e) => e.status === 404);
+	const mycase = await vite.ssrLoadModule('/src/routes/api/rehab/mycase/+server.ts');
+	const mycaseDetail = await vite.ssrLoadModule('/src/routes/api/rehab/mycase/[id]/+server.ts');
+	await assert.rejects(mycase.GET(event('', '', false)), (e) => e.status === 401);
+	await assert.rejects(mycaseDetail.GET(event('', 'test', false)), (e) => e.status === 401);
+	const cases = await (await mycase.GET(event())).json();
+	assert.ok(cases.total > 0);
+	const mf = await (await mycase.GET(event('?type=MF&county=49'))).json();
+	assert.ok(mf.cases.length > 0);
+	assert.ok(mf.cases.every((r) => r.case_type_code === 'MF' && r.county_code === '49'));
+	const caseDetail = await (await mycaseDetail.GET(event('', mf.cases[0].case_number))).json();
+	assert.equal(caseDetail.case.case_number, mf.cases[0].case_number);
+	assert.ok(!('raw_json' in caseDetail.case));
+	assert.ok(!('token' in caseDetail.case));
+	await assert.rejects(mycaseDetail.GET(event('', 'NONEXISTENT')), (e) => e.status === 404);
+	console.log(
+		JSON.stringify({ mycase: 'passed', total: cases.total, lastUpdated: cases.lastUpdated })
+	);
 	const { env: serverEnv } = await vite.ssrLoadModule('$env/dynamic/private');
 	serverEnv.REHAB_ALLOWED_EMAILS = 'different@example.com';
+	await assert.rejects(mycase.GET(event()), (e) => e.status === 401);
+	await assert.rejects(
+		mycaseDetail.GET(event('', mf.cases[0].case_number)),
+		(e) => e.status === 401
+	);
 	await assert.rejects(list.GET(event()), (e) => e.status === 401);
 	console.log(
 		JSON.stringify({
