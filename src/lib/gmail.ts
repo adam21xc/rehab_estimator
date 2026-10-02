@@ -2,65 +2,75 @@ import { google } from 'googleapis';
 import { env } from '$env/dynamic/private';
 
 function assertEnv() {
-  const { GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN } = env;
-  if (!GMAIL_CLIENT_ID || !GMAIL_CLIENT_SECRET || !GMAIL_REFRESH_TOKEN) {
-    throw new Error('Missing Gmail env: GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET / GMAIL_REFRESH_TOKEN');
-  }
-  return { GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN };
+	const { GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN } = env;
+	if (!GMAIL_CLIENT_ID || !GMAIL_CLIENT_SECRET || !GMAIL_REFRESH_TOKEN) {
+		throw new Error(
+			'Missing Gmail env: GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET / GMAIL_REFRESH_TOKEN'
+		);
+	}
+	return { GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN };
 }
 
 export function getOAuth2() {
-  const { GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN } = assertEnv();
-  const oauth2 = new google.auth.OAuth2(GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET /* redirect not needed here */);
-  // ✨ THIS is what the error says is missing:
-  oauth2.setCredentials({ refresh_token: GMAIL_REFRESH_TOKEN });
-  return oauth2;
+	const { GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN } = assertEnv();
+	const oauth2 = new google.auth.OAuth2(
+		GMAIL_CLIENT_ID,
+		GMAIL_CLIENT_SECRET /* redirect not needed here */
+	);
+	// ✨ THIS is what the error says is missing:
+	oauth2.setCredentials({ refresh_token: GMAIL_REFRESH_TOKEN });
+	return oauth2;
 }
 
 export function getGmail() {
-  return google.gmail({ version: 'v1', auth: getOAuth2() });
+	return google.gmail({ version: 'v1', auth: getOAuth2() });
 }
 
 export async function sendGmail(opts: {
-  to: string;
-  subject: string;
-  text?: string;
-  html?: string;
-  fromName?: string;
-  fromEmail?: string;
+	to: string;
+	subject: string;
+	text?: string;
+	html?: string;
+	fromName?: string;
+	fromEmail?: string;
 }) {
-  const gmail = getGmail();
-  const fromName = opts.fromName ?? (env.SENDING_NAME || 'Me');
-  const fromEmail = opts.fromEmail ?? (env.FROM_EMAIL || 'me'); // "me" lets Gmail default to the authed account
+	const gmail = getGmail();
+	const fromName = opts.fromName ?? (env.SENDING_NAME || 'Me');
+	const fromEmail = opts.fromEmail ?? (env.FROM_EMAIL || 'me'); // "me" lets Gmail default to the authed account
 
-  const headers = [
-    `To: ${opts.to}`,
-    `From: ${fromName} <${fromEmail}>`,
-    `Subject: ${opts.subject}`,
-    'MIME-Version: 1.0',
-    'Content-Type: multipart/alternative; boundary="bnd"',
-    '',
-    '--bnd',
-    'Content-Type: text/plain; charset=UTF-8',
-    '',
-    opts.text ?? '',
-    '',
-    '--bnd',
-    'Content-Type: text/html; charset=UTF-8',
-    '',
-    opts.html ?? `<pre>${(opts.text ?? '').replace(/[<&>]/g,(c)=>({ '<':'&lt;','>':'&gt;','&':'&amp;' } as any)[c])}</pre>`,
-    '',
-    '--bnd--'
-  ].join('\n');
+	const headers = [
+		`To: ${opts.to}`,
+		`From: ${fromName} <${fromEmail}>`,
+		`Subject: ${opts.subject}`,
+		'MIME-Version: 1.0',
+		'Content-Type: multipart/alternative; boundary="bnd"',
+		'',
+		'--bnd',
+		'Content-Type: text/plain; charset=UTF-8',
+		'',
+		opts.text ?? '',
+		'',
+		'--bnd',
+		'Content-Type: text/html; charset=UTF-8',
+		'',
+		opts.html ??
+			`<pre>${(opts.text ?? '').replace(/[<&>]/g, (c) => (({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }) as Record<string, string>)[c])}</pre>`,
+		'',
+		'--bnd--'
+	].join('\n');
 
-  const raw = Buffer.from(headers).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+	const raw = Buffer.from(headers)
+		.toString('base64')
+		.replace(/\+/g, '-')
+		.replace(/\//g, '_')
+		.replace(/=+$/, '');
 
-  const res = await gmail.users.messages.send({
-    userId: 'me',
-    requestBody: { raw }
-  });
+	const res = await gmail.users.messages.send({
+		userId: 'me',
+		requestBody: { raw }
+	});
 
-  return res.data; // { id, threadId, ... }
+	return res.data; // { id, threadId, ... }
 }
 
 // export async function getMyAddresses(): Promise<Set<string>> {
@@ -76,7 +86,7 @@ export async function sendGmail(opts: {
 
 // Minimal thread fetch using Gmail API
 export async function getThread(threadId: string) {
-  const gmail = getGmail();
-  const { data } = await gmail.users.threads.get({ userId: 'me', id: threadId });
-  return data;
+	const gmail = getGmail();
+	const { data } = await gmail.users.threads.get({ userId: 'me', id: threadId });
+	return data;
 }

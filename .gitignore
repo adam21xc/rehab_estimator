@@ -23,6 +23,15 @@ Thumbs.db
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
-# Python importer
+# Local manifests for isolated outreach tests
+.outreach-tests/
+
+# Python importer caches
 __pycache__/
 *.pyc
+
+# Private local sales imports
+.sales-data/
+
+# Supabase CLI cache (machine-local)
+supabase/.temp/

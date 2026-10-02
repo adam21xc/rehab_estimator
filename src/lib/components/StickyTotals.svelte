@@ -1,35 +1,22 @@
-<!-- <script lang="ts">
-import { projectStore } from '$lib/stores/projectStore';
-import { currency } from '$lib/domain/format';
-import { fly } from 'svelte/transition';
-const { totals } = projectStore;
-</script>
-<div class="fixed inset-x-0 bottom-0 z-40" aria-live="polite">
-  <div class="mx-auto max-w-screen-md m-3 rounded-2xl shadow-2xl
-              bg-white border p-4 flex items-center justify-between gap-3">
-    <div class="text-sm text-gray-600">Running Total</div>
-    <div class="text-2xl font-bold">{currency($totals.grandTotal)}</div>
-    <button class="rounded-xl bg-gray-900 text-white px-4 py-2"
-            on:click={() => dispatchEvent(new CustomEvent('summary:open'))}>
-      Summary
-    </button>
-  </div>
-</div> -->
-
 <script lang="ts">
-  import { projectStore } from '$lib/stores/projectStore';
-  import { currency } from '$lib/domain/format';
-  import { createEventDispatcher } from 'svelte';
-  const { totals } = projectStore;
-  const dispatch = createEventDispatcher();
+	import { currency } from '$lib/domain/format';
+	import type { CalcTotals } from '$lib/domain/types';
+	let { totals, onOpen }: { totals: CalcTotals; onOpen: () => void } = $props();
 </script>
 
-<div class="fixed inset-x-0 bottom-0 z-40" aria-live="polite">
-  <div class="mx-auto max-w-screen-md m-3 rounded-2xl shadow-2xl bg-white border p-4
-              flex items-center justify-between gap-3">
-    <div class="text-sm text-gray-600">Running Total</div>
-    <div class="text-2xl font-bold">{currency($totals.grandTotal, { max: 2 })}</div>
-    <button class="rounded-xl bg-gray-900 text-white px-4 py-2"
-            on:click={() => dispatch('open')}>Summary</button>
-  </div>
+<div class="estimate-footer fixed inset-x-0 bottom-0 z-40" aria-live="polite">
+	<div
+		class="mx-auto flex w-full max-w-screen-md items-center justify-between gap-3 rounded-t-2xl border border-gray-200 bg-white px-4 py-3 shadow-2xl sm:rounded-2xl"
+	>
+		<div class="min-w-0">
+			<div class="text-xs text-gray-500">Running Total</div>
+			<div class="break-words text-xl font-bold sm:text-2xl" data-testid="running-total">
+				{currency(totals.grandTotal, { max: 2 })}
+			</div>
+		</div>
+		<button
+			class="min-h-12 shrink-0 rounded-xl bg-gray-900 px-5 py-2 text-sm font-semibold text-white"
+			onclick={onOpen}>Summary</button
+		>
+	</div>
 </div>

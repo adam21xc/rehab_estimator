@@ -1,0 +1,1 @@
+alter table public.gateway_sales drop constraint gateway_sales_import_id_sdf_id_parcel_number_key;

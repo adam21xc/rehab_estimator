@@ -45,6 +45,8 @@
 	},
 	"dependencies": {
 		"@supabase/supabase-js": "^2.57.4",
-		"googleapis": "^160.0.0"
+		"googleapis": "^160.0.0",
+		"twilio": "6.1.2",
+		"zod": "^4.6.5"
 	}
 }
