@@ -24,7 +24,11 @@ export type CaseRow = {
 	updated_at: string;
 };
 export type Party = { name?: string; role?: string; address?: { formatted?: string } | null };
-export type CaseDetail = CaseRow & { case_about: string | null; parties: Party[] };
+export type CaseDetail = CaseRow & {
+	case_about: string | null;
+	parties: Party[];
+	timeline?: { available: boolean; events: import('./timeline').TimelineEvent[] };
+};
 export function filingDate(value: string | null) {
 	if (!value) return null;
 	const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value);

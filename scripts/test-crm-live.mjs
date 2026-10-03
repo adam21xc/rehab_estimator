@@ -60,6 +60,12 @@ try {
 	assert.equal(caseDetail.case.case_number, mf.cases[0].case_number);
 	assert.ok(!('raw_json' in caseDetail.case));
 	assert.ok(!('token' in caseDetail.case));
+	const chronology = await (await mycaseDetail.GET(event('', '49K01-2610-EV-003997'))).json();
+	assert.ok(chronology.case.timeline.available);
+	assert.ok(chronology.case.timeline.events.some((e) => e.title === 'Order Issued'));
+	assert.ok(chronology.case.timeline.events.some((e) => e.title === 'Eviction Hearing'));
+	assert.ok(!JSON.stringify(chronology).includes('DownUrl'));
+	assert.ok(!('raw_json' in chronology.case));
 	await assert.rejects(mycaseDetail.GET(event('', 'NONEXISTENT')), (e) => e.status === 404);
 	console.log(
 		JSON.stringify({ mycase: 'passed', total: cases.total, lastUpdated: cases.lastUpdated })

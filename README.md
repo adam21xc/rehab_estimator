@@ -346,3 +346,14 @@ refreshing this inbox only reads the latest database records.
 
 Run `node scripts/test-crm-live.mjs` for live read/auth checks using a temporary user;
 source records are never modified by that verification.
+
+MyCase detail dialogs also show the chronological case summary from stored
+`raw_json.Events`, including filing/order notes, party labels, and hearing sessions.
+Event dates are sorted oldest first with source order retained for same-day entries;
+future hearings are scheduled events, not proof they occurred. Document names are
+shown without exposing source download tokens or implying download permission.
+The scraper already upserts on the text primary key `case_number`: each successful
+refresh replaces the same case snapshot (including events), not a new lead.
+This is the latest stored snapshot, not an audit history of every prior scrape.
+The daily current/previous-month scope does not refresh older active cases; a separate
+older-case reconciliation job is still needed for that coverage.

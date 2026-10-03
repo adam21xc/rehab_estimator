@@ -46,6 +46,27 @@ test('MyCase source filters, paginates, and shows mailing addresses with provena
 				case: {
 					...record,
 					case_about: 'Example case summary',
+					timeline: {
+						available: true,
+						events: [
+							{
+								id: '1',
+								date: '10/02/2026',
+								time: null,
+								title: 'Order Issued',
+								details: [{ label: 'Details', value: 'Example order text' }],
+								documents: []
+							},
+							{
+								id: '2',
+								date: '10/26/2026',
+								time: '11:00 AM',
+								title: 'Eviction Hearing',
+								details: [],
+								documents: []
+							}
+						]
+					},
 					parties: [
 						{
 							name: 'Example Person',
@@ -78,6 +99,9 @@ test('MyCase source filters, paginates, and shows mailing addresses with provena
 	await page.getByRole('button', { name: record.case_number, exact: true }).click();
 	await expect(page.getByRole('dialog')).toContainText('No subject property');
 	await expect(page.getByRole('dialog')).toContainText('Example case summary');
+	await expect(page.getByRole('heading', { name: 'Chronological case summary' })).toBeVisible();
+	await expect(page.getByRole('dialog')).toContainText('Example order text');
+	await expect(page.getByRole('dialog')).toContainText('10/26/2026');
 	await expect(page.getByRole('dialog')).toContainText('Defendant');
 	await page.keyboard.press('Escape');
 	await page.setViewportSize({ width: 390, height: 844 });

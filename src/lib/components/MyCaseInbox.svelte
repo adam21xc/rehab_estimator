@@ -198,6 +198,29 @@
 			</p>
 			{#if selected.case_about}<h3>Case summary</h3>
 				<p>{selected.case_about}</p>{/if}
+			<h3>Chronological case summary</h3>
+			<p class="context">
+				Stored as of {new Date(selected.updated_at).toLocaleString('en-US', {
+					timeZone: 'America/Indiana/Indianapolis'
+				})} Eastern. Oldest date first; future dates may be scheduled hearings, not completed events.
+			</p>
+			{#if !selected.timeline?.available}<p>
+					Chronological summary has not been captured for this record.
+				</p>
+			{:else if !selected.timeline.events.length}<p>
+					No chronological events were returned in the stored summary.
+				</p>
+			{:else}<ol class="timeline">
+					{#each selected.timeline.events as event (event.id)}<li>
+							<div class="event-date">{event.date || 'Date not listed'} {event.time || ''}</div>
+							<strong>{event.title}</strong>{#each event.details as detail, i (i)}<p>
+									<span>{detail.label}:</span>
+									{detail.value}
+								</p>{/each}{#if event.documents.length}<p class="document-note">
+									Documents referenced: {event.documents.join(', ')}. View availability in MyCase.
+								</p>{/if}
+						</li>{/each}
+				</ol>{/if}
 			<h3>Parties and mailing addresses</h3>
 			{#each selected.parties || [] as party, i (i)}<div class="party">
 					<strong>{party.name || 'Unnamed party'}</strong><small
@@ -217,6 +240,29 @@
 </dialog>
 
 <style>
+	.timeline {
+		list-style: none;
+		padding: 0;
+	}
+	.timeline li {
+		padding: 18px 0;
+		border-bottom: 1px solid #3a3b43;
+	}
+	.timeline p {
+		white-space: pre-line;
+		overflow-wrap: anywhere;
+		line-height: 1.6;
+		margin: 8px 0;
+	}
+	.event-date,
+	.timeline span,
+	.document-note {
+		color: #b4b6c0;
+		font-size: 12px;
+	}
+	.event-date {
+		margin-bottom: 8px;
+	}
 	.mycase {
 		background: #191a1e;
 		border: 1px solid #383940;
