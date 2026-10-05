@@ -65,12 +65,8 @@
 	/></svelte:head
 >
 <div class="shell">
-	<header>
-		<a href={resolve('/sales')}>Λ APEX <span>PROPERTY INTELLIGENCE</span></a><a
-			href={resolve('/sales')}>← Sales dashboard</a
-		>
-	</header>
 	<main>
+		<a class="back-link" href={resolve('/sales')}>← Sales intelligence</a>
 		{#if busy}<p role="status">Loading property…</p>
 		{:else if needsLogin}<section>
 				<h1>Your property workspace.</h1>
@@ -188,38 +184,22 @@
 
 <style>
 	.shell {
-		min-height: 100vh;
-		background: #101113;
-		color: #ecebe6;
+		min-height: calc(100dvh - 64px);
+		background: var(--canvas);
+		color: var(--ink);
 		font-family: Inter, Arial, sans-serif;
-		color-scheme: dark;
+		color-scheme: light;
 	}
 	.shell * {
 		box-sizing: border-box;
 	}
-	header {
-		display: flex;
-		justify-content: space-between;
-		gap: 20px;
-		border-bottom: 1px solid #343438;
-		padding: 24px 32px;
-	}
-	header a {
-		text-decoration: none;
-	}
-	header span {
-		font-size: 10px;
-		letter-spacing: 2px;
-		color: #aaa;
-		margin-left: 12px;
-	}
 	a {
-		color: #ff968b;
+		color: var(--accent);
 	}
 	main {
 		max-width: 1400px;
 		margin: auto;
-		padding: 42px 32px;
+		padding: 32px;
 	}
 	h1 {
 		font-size: clamp(28px, 4vw, 46px);
@@ -234,14 +214,14 @@
 		margin: 0 0 18px;
 	}
 	.eyebrow {
-		color: #ff897b;
+		color: var(--accent);
 		letter-spacing: 2px;
 		font-size: 11px;
 		font-weight: 700;
 	}
 	.sub,
 	.note {
-		color: #aaaeb8;
+		color: var(--muted);
 		line-height: 1.7;
 	}
 	.note {
@@ -249,9 +229,9 @@
 	}
 	.notice {
 		padding: 16px;
-		border-left: 2px solid #ddad7e;
-		background: #28231f;
-		color: #d7c6b6;
+		border-left: 2px solid var(--accent);
+		background: var(--surface);
+		color: var(--muted);
 		font-size: 13px;
 		line-height: 1.6;
 		margin: 24px 0;
@@ -263,8 +243,8 @@
 	}
 	section {
 		min-width: 0;
-		background: #191a1e;
-		border: 1px solid #36373f;
+		background: var(--surface);
+		border: 1px solid var(--border);
 		border-radius: 12px;
 		padding: 24px;
 		margin-bottom: 24px;
@@ -274,7 +254,7 @@
 		height: 370px;
 		border: 0;
 		border-radius: 8px;
-		background: #24262c;
+		background: var(--canvas);
 	}
 	.links {
 		display: flex;
@@ -285,11 +265,11 @@
 	.button,
 	button {
 		display: inline-block;
-		border: 1px solid #4a4b54;
+		border: 1px solid var(--border);
 		border-radius: 6px;
 		padding: 12px 16px;
-		background: #25262d;
-		color: #eee;
+		background: var(--canvas);
+		color: var(--ink);
 		text-decoration: none;
 		font: inherit;
 		font-size: 13px;
@@ -297,16 +277,16 @@
 	}
 	a:focus-visible,
 	button:focus-visible {
-		outline: 2px solid #ff897b;
+		outline: 2px solid var(--accent);
 		outline-offset: 4px;
 	}
 	.price {
 		font-size: 36px;
 		margin: 24px 0;
-		color: #a7d8c2;
+		color: #16836b;
 	}
 	dt {
-		color: #a3a7b2;
+		color: var(--muted);
 		font-size: 12px;
 		margin-top: 22px;
 	}
@@ -327,7 +307,7 @@
 	}
 	th {
 		text-align: left;
-		color: #b0b3be;
+		color: var(--muted);
 		font-size: 11px;
 		text-transform: uppercase;
 		white-space: nowrap;
@@ -335,11 +315,11 @@
 	td,
 	th {
 		padding: 17px 14px;
-		border-bottom: 1px solid #36373f;
+		border-bottom: 1px solid var(--border);
 		line-height: 1.6;
 	}
 	tr.selected {
-		background: #25282c;
+		background: var(--canvas);
 	}
 	td {
 		min-width: 110px;
@@ -347,13 +327,6 @@
 	@media (max-width: 720px) {
 		main {
 			padding: 28px 16px;
-		}
-		header {
-			padding: 20px 16px;
-			font-size: 12px;
-		}
-		header span {
-			display: none;
 		}
 		.overview {
 			grid-template-columns: 1fr;

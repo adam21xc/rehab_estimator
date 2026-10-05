@@ -64,7 +64,7 @@ test('does not replace API failures with zero sales', async ({ page }) => {
 		r.fulfill({ status: 503, json: { message: 'Sales data is temporarily unavailable.' } })
 	);
 	await page.goto('/sales');
-	await expect(page.getByRole('alert')).toContainText('Sales data is temporarily unavailable.');
+	await expect(page.getByRole('alert').filter({ hasText: 'Sales data is temporarily unavailable.' })).toBeVisible();
 });
 
 test('inventory cutoff, date ordering and pagination controls', async ({ page }) => {

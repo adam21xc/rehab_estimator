@@ -246,7 +246,7 @@
 	}
 	.timeline li {
 		padding: 18px 0;
-		border-bottom: 1px solid #3a3b43;
+		border-bottom: 1px solid var(--border);
 	}
 	.timeline p {
 		white-space: pre-line;
@@ -257,17 +257,17 @@
 	.event-date,
 	.timeline span,
 	.document-note {
-		color: #b4b6c0;
+		color: var(--muted);
 		font-size: 12px;
 	}
 	.event-date {
 		margin-bottom: 8px;
 	}
 	.mycase {
-		background: #191a1e;
-		border: 1px solid #383940;
+		background: var(--surface);
+		border: 1px solid var(--border);
 		border-radius: 12px;
-		color: #eee;
+		color: var(--ink);
 		margin: 24px 0;
 		overflow: hidden;
 	}
@@ -283,11 +283,11 @@
 		font-size: 24px;
 	}
 	h2 span {
-		color: #aaa;
+		color: var(--muted);
 		font-size: 16px;
 	}
 	.eyebrow {
-		color: #ff897b;
+		color: var(--accent);
 		letter-spacing: 2px;
 		font-size: 11px;
 		font-weight: 700;
@@ -296,13 +296,13 @@
 	.freshness {
 		font-size: 13px;
 		line-height: 1.7;
-		color: #b4b6c0;
+		color: var(--muted);
 		margin: 0;
 		padding: 12px 24px;
 	}
 	.freshness {
-		background: #28231f;
-		color: #dac7b2;
+		background: var(--surface);
+		color: var(--muted);
 	}
 	form {
 		display: flex;
@@ -316,7 +316,7 @@
 		flex-direction: column;
 		gap: 8px;
 		font-size: 12px;
-		color: #b4b6c0;
+		color: var(--muted);
 	}
 	label:first-child {
 		flex: 1;
@@ -326,11 +326,11 @@
 	select,
 	button {
 		font: inherit;
-		border: 1px solid #444650;
+		border: 1px solid var(--border);
 		border-radius: 6px;
 		padding: 12px;
-		background: #22232a;
-		color: #eee;
+		background: var(--canvas);
+		color: var(--ink);
 		min-height: 44px;
 	}
 	button {
@@ -342,12 +342,12 @@
 		cursor: default;
 	}
 	.primary {
-		background: #ef6555;
-		color: #fff;
+		background: var(--accent);
+		color: white;
 	}
 	input,
 	select {
-		background: #111215;
+		background: var(--surface);
 	}
 	.table-wrap {
 		overflow-x: auto;
@@ -361,24 +361,24 @@
 	td {
 		text-align: left;
 		padding: 18px;
-		border-bottom: 1px solid #35373f;
+		border-bottom: 1px solid var(--border);
 		line-height: 1.6;
 	}
 	th {
 		font-size: 11px;
 		text-transform: uppercase;
-		background: #24262d;
+		background: var(--canvas);
 	}
 	td {
 		min-width: 135px;
 	}
 	small {
 		display: block;
-		color: #a2a6b3;
+		color: var(--muted);
 		margin-top: 6px;
 	}
 	.case {
-		color: #ff998e;
+		color: var(--accent);
 		padding: 0;
 		background: transparent;
 		border: 0;
@@ -392,23 +392,23 @@
 		gap: 18px;
 		padding: 20px;
 		font-size: 12px;
-		color: #bbb;
+		color: var(--muted);
 	}
 	footer div {
 		display: flex;
 		gap: 8px;
 	}
 	dialog {
-		color: #eee;
-		background: #1a1b20;
-		border: 1px solid #494b54;
+		color: var(--ink);
+		background: var(--surface);
+		border: 1px solid var(--border);
 		border-radius: 12px;
 		width: min(760px, 94vw);
 		max-height: 90vh;
 		padding: 0;
 	}
 	dialog::backdrop {
-		background: #000b;
+		background: var(--surface);
 	}
 	.modal {
 		padding: 24px;
@@ -418,19 +418,19 @@
 	}
 	.party {
 		padding: 16px 0;
-		border-bottom: 1px solid #3a3b43;
+		border-bottom: 1px solid var(--border);
 	}
 	.party p {
 		white-space: pre-line;
 	}
 	a {
-		color: #ff998e;
+		color: var(--accent);
 	}
 	button:focus-visible,
 	a:focus-visible,
 	input:focus,
 	select:focus {
-		outline: 2px solid #ff897b;
+		outline: 2px solid var(--accent);
 		outline-offset: 3px;
 	}
 	@media (max-width: 720px) {

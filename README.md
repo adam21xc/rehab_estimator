@@ -27,8 +27,12 @@ Outreach requires a local, Git-ignored `.env` with `PUBLIC_SUPABASE_URL`,
 `GMAIL_REDIRECT_URI`, `GMAIL_REFRESH_TOKEN`, `FROM_EMAIL`, `SENDING_NAME`, and
 `PUBLIC_BASE_DOMAIN`. Never put the service-role key or OAuth secrets in public
 variables. Optional settings include `BATCH_SIZE`, `SEND_DELAY_MS`,
-`DAYS_BETWEEN_FOLLOWUPS`, `MAX_FOLLOWUPS`, `SEND_DUE_SECRET`, and
-`SCAN_REPLIES_SECRET` (required by the reply scanner).
+`DAYS_BETWEEN_FOLLOWUPS` and `MAX_FOLLOWUPS`.
+`SEND_DUE_SECRET` is required by both `/api/send-due` (including previews) and
+`/api/gmail-test`; `SCAN_REPLIES_SECRET` is required by the reply scanner. These
+routes reject requests when their secret is unset. Configure strong random secrets
+privately in `.env`, then enter them in the Outreach Admin password fields. They
+are held in page memory only. API callers supply `Authorization: Bearer <secret>`.
 
 For local Gmail reauthorization, register
 `http://localhost:5173/api/oauth/callback` in the Google OAuth client, set it as
@@ -83,9 +87,9 @@ Avoid installing a duplicate local Accela schedule. Gateway sales refresh is sti
 email/SMS outreach is not automatically enabled by cloning the repository.
 
 This is suitable for local development, not an approval to expose the entire app
-publicly. Legacy outreach endpoints need an authorization review before public
-hosting: `/api/gmail-test` has no session guard, and `/api/send-due` permits requests
-when `SEND_DUE_SECRET` is absent. The CRM endpoints independently require a verified,
+publicly. Legacy outreach still needs work before public hosting: Gmail health and
+OAuth setup routes have no workspace session guard, and batch email sends lack a
+durable claim to prevent concurrent duplicate sends. The CRM endpoints independently require a verified,
 allowlisted workspace account. Paid image generation and live SMS/email sending
 were not exercised by the repository verification.
 
@@ -105,6 +109,13 @@ local image data with authenticated media references. Old temporary blob URLs ca
 recover image bytes after their originating browser session ends. See the cloud setup below.
 
 ## Verification
+
+See [the codebase review and development handoff](docs/CODEBASE_REVIEW.md) for the
+architecture, remaining risks, feature entry points, and October 2 dependency fixes.
+Use `npm ci` to reproduce the audited lockfile. Vitest is on 4.1.11 or newer in
+the 4.x series; its browser tests use `@vitest/browser-playwright`. A scoped npm
+override selects `cookie@0.7.2` for SvelteKit 2 to fix its cookie-validation advisory
+without a SvelteKit major upgrade. Revisit that override when upgrading SvelteKit.
 
 ```sh
 npm run check
@@ -218,11 +229,9 @@ REHAB_ALLOWED_EMAILS=adam@adam-buys-houses.com
 OPENAI_API_KEY=YOUR_OPENAI_API_KEY
 ```
 
-Use **Sign in → Create account** for the approved email, confirm its email if required,
-then sign in. Supabase Auth must allow email/password login. Configure the Auth Site URL
-and allowed redirect URLs for `/rehab` on localhost and the deployment. The Supabase
-confirmation-email sender may require custom SMTP. Existing Gmail OAuth authorization
-is separate from this account. Access/refresh tokens live in HttpOnly SameSite cookies;
+Use **Sign in → Send sign-in code** with an existing, approved Supabase Auth account. There are no password or account-creation forms. Enable email authentication and configure the **Magic Link** email template to include `{{ .Token }}` (for example, `<h2>Your Apex sign-in code</h2><p>{{ .Token }}</p>`). This is a required deployment step: the default template sends a link rather than displaying the code. Configure SMTP delivery for the approved email address. The app uses `signInWithOtp` with `shouldCreateUser: false`, verifies the code on the server, and retains the email allowlist. No sign-in email is sent until the user requests one.
+
+Access/refresh tokens live in HttpOnly SameSite cookies;
 the server verifies the user with Supabase on each private request. Mutations require
 a matching Origin. Sign-out leaves the current local draft on that device.
 
@@ -306,7 +315,7 @@ phone-to-property matches. It supports manually selected SMS recipients only.
 Verification: `node scripts/test-twilio-integration.mjs` exercises actual route handlers
 against live Supabase with temporary records, intercepts all Twilio API calls, tests
 inbound STOP and callback ordering, and cleans up. It never sends a real SMS. Browser and
-unit tests cover the signup controls, disabled unconfigured sending and signature checks.
+unit tests cover passwordless sign-in, disabled unconfigured sending and signature checks.
 
 Official Twilio references:
 
@@ -353,7 +362,71 @@ Event dates are sorted oldest first with source order retained for same-day entr
 future hearings are scheduled events, not proof they occurred. Document names are
 shown without exposing source download tokens or implying download permission.
 The scraper already upserts on the text primary key `case_number`: each successful
-refresh replaces the same case snapshot (including events), not a new lead.
+explicit refresh replaces the same case snapshot (including events), not a new lead.
+The daily discovery runner now checks saved case numbers before requesting details, skipping successfully imported cases and fetching only missing or incomplete records. Existing cases are not refreshed for later filings by that daily job.
 This is the latest stored snapshot, not an audit history of every prior scrape.
 The daily current/previous-month scope does not refresh older active cases; a separate
 older-case reconciliation job is still needed for that coverage.
+
+
+### Property intelligence map
+
+The Sales intelligence page now includes a Mapbox map of the complete supported
+MyCase inbox, Indy Accela records, and the latest complete Marion County 2026
+Gateway snapshot. Layer, filing/sale-date, address/parcel, and multiple-indicator
+filters apply to map pins and the accessible address list. Records share a pin
+only when their normalized full addresses match; units and ZIP codes are retained.
+Nearby properties cluster, and selecting an address fans out up to 48 indicators
+(all records remain available in the details panel). Collocated addresses can also
+be selected in the details panel.
+
+Configuration:
+
+- Set `MAPBOX_PUBLIC_TOKEN` in `.env` and the deployment environment. This is a
+  public `pk` token for styles/fonts, restricted to your browser origins.
+- Optionally set `MAPBOX_GEOCODING_TOKEN` for server geocoding when the browser
+  token has URL restrictions. It needs no secret/write scopes. It stays server-only.
+- Apply `supabase/migrations/20261004225101_property_geocodes.sql` to the app's
+  existing project. This table has RLS enabled and service-role-only grants, matching
+  the source-table access pattern. Both map endpoints require the workspace allowlist;
+  geocoding additionally requires a same-origin POST.
+- Use **Locate missing addresses** to process bounded batches until finished, or
+  stop after the current batch. GET/map loads never initiate paid geocoding.
+  A Mapbox billing account eligible for permanent geocoding is required. Every
+  geocoding request uses `permanent=true`, `autocomplete=false`, and an address type.
+
+Coordinates, match confidence, provenance, and timestamps are persisted by a
+conservative normalized address key. Completed matches are reused across sources
+and reloads. A database reservation prevents simultaneous workers from looking up
+one address; interrupted reservations can be reclaimed after ten minutes. Failed
+or uncertain matches are not automatically retried. Review the original address
+and saved match metadata before explicitly clearing a failed/review cache row to
+retry. City-only, incomplete, PO box, interpolated, and uncertain matches are left
+unmapped. Missing cache storage disables geocoding rather than paying for results
+that cannot be saved.
+
+MyCase locations are **defendant addresses**, not verified subject properties.
+Gateway buyers are labeled buyers rather than current owners; multi-parcel prices
+are labeled transfer totals. DealMachine enrichment and a statistically valid
+lead-to-sale analysis remain future work. In particular, the current sales snapshot
+ends July 31, 2026 and does not establish a full-year follow-up or an unsold baseline.
+Map filters are independent of the sales tables below, whose residential/all-class
+scope does not restrict the map.
+
+Validation: `npm run check`, `npm run build`, the intelligence/geocoding/API unit
+tests, and `npx playwright test e2e/intelligence-map.test.ts`. The optional basemap
+browser test uses the local public token with synthetic property fixtures; it does
+not geocode or modify source data.
+
+The coordinate-cache migration was applied to **Adam Buys Houses**
+(`hjjovyarddvzqfhzaiuq`) on October 4, 2026. Its RLS is enabled and direct anonymous
+and authenticated-role reads are revoked; allowlisted server requests can read it.
+The project advisor's no-policy notice is intentional for this server-only table
+([Supabase guidance](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy)).
+
+For an explicit command-line backfill, run `node scripts/geocode-properties.mjs --all`
+or replace `--all` with a maximum number of addresses. This makes paid permanent
+lookups only for eligible uncached addresses, with at most five in flight. Ctrl-C
+stops after the current batch. Re-running resumes from the database cache. Run
+`node scripts/test-map-live.mjs` to verify the live read/auth/cache integration;
+it creates and removes its own temporary auth user and makes no geocoding calls.

@@ -9,8 +9,8 @@ test('quantities, totals, summary and category navigation survive reload', async
 	await page.getByRole('spinbutton').first().fill('10');
 	await expect(page.getByTestId('running-total')).toHaveText('$407');
 	await page.getByRole('button', { name: 'Summary', exact: true }).click();
-	await expect(page.locator('aside')).toContainText('100.5 × $4 = $402');
-	await expect(page.locator('aside')).toContainText('Total: $407');
+	await expect(page.getByRole('dialog').locator('aside')).toContainText('100.5 × $4 = $402');
+	await expect(page.getByRole('dialog').locator('aside')).toContainText('Total: $407');
 	await page.getByRole('button', { name: 'Close', exact: true }).click();
 	await page.reload();
 	await expect(roof).toHaveValue('100.5');

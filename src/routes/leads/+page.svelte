@@ -1,7 +1,10 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import EmailSignIn from '$lib/components/EmailSignIn.svelte';
+	import { page as route } from '$app/state';
+	import { goto } from '$app/navigation';
 	import MyCaseInbox from '$lib/components/MyCaseInbox.svelte';
-	let source = $state('accela');
+	const source = $derived(route.url.searchParams.get('source') === 'mycase' ? 'mycase' : 'accela');
 	import { resolve } from '$app/paths';
 	type Party = { display_name: string; raw_lines: string[]; phones: string[]; emails: string[] };
 	type Lead = {
@@ -22,13 +25,8 @@
 	};
 	let signedIn = $state(false),
 		checking = $state(true),
-		busy = $state(false),
-		authBusy = $state(false);
-	let email = $state(''),
-		password = $state(''),
-		mode = $state<'signin' | 'signup'>('signin');
-	let message = $state(''),
-		problem = $state(''),
+		busy = $state(false);
+	let problem = $state(''),
 		detailError = $state('');
 	let leads = $state<Lead[]>([]),
 		selected = $state<Lead | null>(null),
@@ -98,29 +96,6 @@
 			if (current === generation) busy = false;
 		}
 	}
-	async function authenticate(event: SubmitEvent) {
-		event.preventDefault();
-		authBusy = true;
-		problem = '';
-		message = '';
-		try {
-			const result = await request('/api/rehab/session', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ email, password, mode })
-			});
-			password = '';
-			message = result.message;
-			if (result.signedIn) {
-				signedIn = true;
-				await load();
-			}
-		} catch (e) {
-			problem = (e as Error).message;
-		} finally {
-			authBusy = false;
-		}
-	}
 	async function signOut() {
 		try {
 			await request('/api/rehab/session', { method: 'DELETE' });
@@ -128,7 +103,6 @@
 			signedIn = false;
 			leads = [];
 			selected = null;
-			message = '';
 		} catch (e) {
 			problem = (e as Error).message;
 		}
@@ -164,64 +138,39 @@
 	><title>Lead inbox · Apex CRM</title><meta name="theme-color" content="#101113" /></svelte:head
 >
 <div class="crm">
-	<header>
-		<a class="brand" href={resolve('/leads')}><span>Λ</span> APEX <small>PROPERTY CRM</small></a>
-		<nav aria-label="Workspace">
-			<a href={resolve('/sales')}>Sales intelligence</a>
-			<a class="active" href={resolve('/leads')}>Leads</a><a href={resolve('/rehab')}
-				>Rehab studio</a
-			>{#if signedIn}<button onclick={signOut}>Sign out</button>{/if}
-		</nav>
-	</header>
 	<main>
 		<div class="heading">
 			<div>
 				<p class="eyebrow">ACQUISITIONS / LEAD INTELLIGENCE</p>
-				<h1>Your next opportunity.</h1>
+				<h1>{source === 'mycase' ? 'MyCase records' : 'Accela records'}</h1>
 				<p class="muted">Local signals. Real properties. One place to start.</p>
 			</div>
-			<span class="source"><i></i> Accela · Indiana MyCase</span>
+			<div class="source">
+				{#if signedIn}<button onclick={signOut}>Sign out</button>{/if}
+			</div>
 		</div>
 		{#if problem}<div class="notice error" role="alert">
 				{problem}{#if signedIn}<button onclick={() => load(page)}>Retry</button>{/if}
 			</div>{/if}
 		{#if checking}<p class="notice" role="status">Opening your workspace…</p>
 		{:else if !signedIn}
-			<section class="signin">
-				<p class="eyebrow">YOUR PRIVATE WORKSPACE</p>
-				<h2>{mode === 'signin' ? 'Sign in to your CRM.' : 'Create your workspace account.'}</h2>
-				<p class="muted">
-					Use the same account as the rehab calculator. This is your app password, not your Gmail
-					password.
-				</p>
-				<form onsubmit={authenticate}>
-					<label>Email<input type="email" bind:value={email} autocomplete="email" required /></label
-					><label
-						>Password<input
-							type="password"
-							bind:value={password}
-							minlength="8"
-							autocomplete={mode === 'signin' ? 'current-password' : 'new-password'}
-							required
-						/></label
-					><button class="primary" disabled={authBusy}
-						>{authBusy ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Create account'}</button
-					>
-				</form>
-				<button
-					class="text-button"
-					onclick={() => {
-						mode = mode === 'signin' ? 'signup' : 'signin';
-						problem = '';
-						message = '';
-					}}>{mode === 'signin' ? 'Create an account' : 'Already have an account?'}</button
-				>{#if message}<p role="status">{message}</p>{/if}
-			</section>
+			<EmailSignIn
+				onSignedIn={async () => {
+					signedIn = true;
+					await load();
+				}}
+			/>
 		{:else}
 			<div class="source-tabs" role="tablist" aria-label="Lead source">
-				<button role="tab" aria-selected={source === 'accela'} onclick={() => (source = 'accela')}
+				<button
+					role="tab"
+					aria-selected={source === 'accela'}
+					onclick={() => goto(resolve('/leads?source=accela'), { noScroll: true })}
 					>Code violations</button
-				><button role="tab" aria-selected={source === 'mycase'} onclick={() => (source = 'mycase')}
+				><button
+					role="tab"
+					aria-selected={source === 'mycase'}
+					onclick={() => goto(resolve('/leads?source=mycase'), { noScroll: true })}
 					>MyCase court leads</button
 				>
 			</div>
@@ -444,65 +393,22 @@
 		margin: 20px 0;
 	}
 	.source-tabs [aria-selected='true'] {
-		border-color: #ff897b;
-		color: #ff897b;
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 	.crm {
-		min-height: 100vh;
-		background: #101113;
-		color: #edece8;
+		min-height: calc(100dvh - 64px);
+		background: var(--canvas);
+		color: var(--ink);
 		font-family: Inter, Arial, sans-serif;
-		color-scheme: dark;
+		color-scheme: light;
 	}
 	.crm * {
 		box-sizing: border-box;
 	}
-	header {
-		max-width: 1440px;
-		margin: auto;
-		padding: 24px 40px;
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		border-bottom: 1px solid #2c2d31;
-	}
-	.brand {
-		font-size: 24px;
-		font-weight: 800;
-		letter-spacing: 2px;
-		text-decoration: none;
-		color: inherit;
-		display: flex;
-		align-items: center;
-		gap: 12px;
-	}
-	.brand span {
-		color: #ff584b;
-		font-size: 34px;
-	}
-	.brand small {
-		font-size: 9px;
-		letter-spacing: 2px;
-		color: #a4a5ad;
-		border-left: 1px solid #555;
-		padding-left: 12px;
-	}
-	nav {
-		display: flex;
-		gap: 24px;
-		align-items: center;
-	}
-	nav a {
-		color: #a4a5ad;
-		text-decoration: none;
-		font-size: 13px;
-	}
-	nav .active {
-		color: #ff6559;
-	}
 	main {
 		max-width: 1440px;
-		padding: 54px 40px;
+		padding: 32px;
 		margin: auto;
 	}
 	.heading {
@@ -515,13 +421,13 @@
 	.eyebrow {
 		font-size: 10px;
 		letter-spacing: 2px;
-		color: #ff776c;
+		color: var(--accent);
 		font-weight: 700;
 		margin: 0 0 12px;
 	}
 	h1 {
-		font-size: clamp(32px, 4vw, 48px);
-		letter-spacing: -2px;
+		font-size: 30px;
+		letter-spacing: -0.8px;
 		font-weight: 650;
 		margin: 0 0 12px;
 		line-height: 1.1;
@@ -534,28 +440,20 @@
 	}
 	.muted,
 	.context {
-		color: #a4a5ad;
+		color: var(--muted);
 		font-size: 14px;
 		line-height: 1.6;
 	}
 	.source {
 		font-size: 12px;
-		color: #bcbec4;
+		color: var(--muted);
 		white-space: nowrap;
-	}
-	.source i {
-		display: inline-block;
-		width: 6px;
-		height: 6px;
-		background: #ff6254;
-		border-radius: 50%;
-		margin-right: 8px;
 	}
 	.metrics {
 		display: grid;
 		grid-template-columns: repeat(3, 1fr);
-		border: 1px solid #343438;
-		background: linear-gradient(125deg, #202125, #17181b);
+		border: 1px solid var(--border);
+		background: var(--surface);
 		border-radius: 12px;
 		margin-bottom: 36px;
 	}
@@ -566,10 +464,10 @@
 		gap: 8px;
 	}
 	.metrics > div + div {
-		border-left: 1px solid #343438;
+		border-left: 1px solid var(--border);
 	}
 	.metrics span {
-		color: #babac1;
+		color: var(--muted);
 		font-size: 12px;
 	}
 	.metrics strong {
@@ -579,12 +477,12 @@
 	}
 	.metrics small {
 		font-size: 11px;
-		color: #92939c;
+		color: var(--muted);
 	}
 	.inbox {
-		border: 1px solid #343438;
+		border: 1px solid var(--border);
 		border-radius: 12px;
-		background: #18191c;
+		background: var(--surface);
 		overflow: hidden;
 	}
 	.section-heading {
@@ -596,7 +494,7 @@
 	}
 	.section-heading h2 span {
 		font-size: 12px;
-		border: 1px solid #48494f;
+		border: 1px solid var(--border);
 		border-radius: 20px;
 		padding: 4px 8px;
 		vertical-align: middle;
@@ -614,8 +512,8 @@
 	}
 	button {
 		cursor: pointer;
-		border: 1px solid #44454c;
-		background: #222328;
+		border: 1px solid var(--border);
+		background: var(--surface);
 		color: inherit;
 		border-radius: 6px;
 		padding: 10px 14px;
@@ -623,20 +521,20 @@
 		min-height: 40px;
 	}
 	button:hover {
-		background: #34353b;
+		background: var(--canvas);
 	}
 	button:disabled {
 		opacity: 0.45;
 		cursor: default;
 	}
 	.primary {
-		background: #f25749;
-		border-color: #f25749;
-		color: #fff;
+		background: #eef3ff;
+		border-color: var(--accent);
+		color: white;
 		font-weight: 600;
 	}
 	.primary:hover {
-		background: #d94438;
+		background: #eef3ff;
 	}
 	.filters {
 		padding: 0 24px 24px;
@@ -646,7 +544,7 @@
 	}
 	.filters label {
 		font-size: 10px;
-		color: #a9abb3;
+		color: var(--muted);
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
@@ -660,17 +558,17 @@
 		width: 100%;
 		min-height: 42px;
 		padding: 10px 12px;
-		border: 1px solid #44454c;
+		border: 1px solid var(--border);
 		border-radius: 6px;
-		background: #111215;
-		color: #eee;
+		background: var(--surface);
+		color: var(--ink);
 		font-size: 12px;
 	}
 	input:focus,
 	select:focus,
 	button:focus-visible,
 	a:focus-visible {
-		outline: 2px solid #ff776c;
+		outline: 2px solid var(--accent);
 		outline-offset: 3px;
 	}
 	.table-wrap {
@@ -683,8 +581,8 @@
 		font-size: 12px;
 	}
 	th {
-		background: #202125;
-		color: #a7a8af;
+		background: var(--surface);
+		color: var(--muted);
 		font-size: 10px;
 		letter-spacing: 0.6px;
 		text-transform: uppercase;
@@ -693,20 +591,20 @@
 	}
 	td {
 		padding: 20px;
-		border-bottom: 1px solid #2e2f34;
+		border-bottom: 1px solid var(--border);
 		max-width: 270px;
-		color: #c8c9cf;
+		color: var(--muted);
 		line-height: 1.5;
 	}
 	td small {
 		display: block;
-		color: #858792;
+		color: var(--muted);
 		font-size: 10px;
 		margin-top: 5px;
 		letter-spacing: 0.5px;
 	}
 	tr:hover td {
-		background: #1f2024;
+		background: var(--surface);
 	}
 	.address {
 		padding: 0;
@@ -715,12 +613,12 @@
 		text-align: left;
 		font-size: 13px;
 		font-weight: 600;
-		color: #f1efea;
+		color: var(--ink);
 		min-height: 24px;
 	}
 	.address:hover {
 		background: transparent;
-		color: #ff776c;
+		color: var(--accent);
 	}
 	.date {
 		white-space: nowrap;
@@ -728,25 +626,25 @@
 	.badge {
 		display: inline-block;
 		padding: 4px 8px;
-		background: #453224;
-		color: #f2c497;
-		border: 1px solid #65452c;
+		background: var(--canvas);
+		color: var(--muted);
+		border: 1px solid var(--accent);
 		border-radius: 5px;
 		font-size: 10px;
 		white-space: nowrap;
 	}
 	.badge.closed {
-		background: #292d30;
-		border-color: #42474b;
-		color: #b2b8bf;
+		background: var(--canvas);
+		border-color: var(--border);
+		color: var(--muted);
 	}
 	.detail-status {
 		font-size: 11px;
-		color: #9698a3;
+		color: var(--muted);
 		white-space: nowrap;
 	}
 	.detail-status.ready {
-		color: #9ccbb2;
+		color: #16836b;
 	}
 	.pagination {
 		padding: 16px 24px;
@@ -754,7 +652,7 @@
 		justify-content: space-between;
 		align-items: center;
 		font-size: 11px;
-		color: #a4a5ad;
+		color: var(--muted);
 	}
 	.pagination div {
 		display: flex;
@@ -763,10 +661,10 @@
 	.empty {
 		padding: 60px 24px;
 		text-align: center;
-		color: #a4a5ad;
+		color: var(--muted);
 	}
 	.empty h3 {
-		color: #e6e5e0;
+		color: var(--ink);
 		font-size: 18px;
 	}
 	.footnote {
@@ -774,46 +672,21 @@
 		justify-content: space-between;
 		gap: 15px;
 		margin-top: 18px;
-		color: #8e909b;
+		color: var(--muted);
 		font-size: 10px;
 	}
 	.notice {
 		padding: 20px;
-		border: 1px solid #4b4b52;
+		border: 1px solid var(--border);
 		border-radius: 8px;
 		margin: 20px 0;
 	}
 	.error {
-		color: #ffb2aa;
-		border-color: #9c524c;
+		color: var(--accent);
+		border-color: var(--accent);
 	}
 	.notice button {
 		margin-left: 12px;
-	}
-	.signin {
-		max-width: 450px;
-		margin: 60px auto;
-		padding: 32px;
-		background: #1b1c20;
-		border: 1px solid #3e3f45;
-		border-radius: 12px;
-	}
-	.signin form {
-		display: grid;
-		gap: 18px;
-		margin-top: 24px;
-	}
-	.signin label {
-		display: grid;
-		gap: 8px;
-		font-size: 12px;
-	}
-	.text-button {
-		border: none;
-		background: transparent;
-		padding-left: 0;
-		margin-top: 14px;
-		color: #ff8d82;
 	}
 	dialog {
 		position: fixed;
@@ -824,15 +697,15 @@
 		max-height: 100dvh;
 		max-width: 100%;
 		border: 0;
-		border-left: 1px solid #45454d;
-		background: #191a1e;
-		color: #ecebe7;
-		color-scheme: dark;
+		border-left: 1px solid var(--border);
+		background: var(--surface);
+		color: var(--ink);
+		color-scheme: light;
 		font-family: Inter, Arial, sans-serif;
 		padding: 0;
 	}
 	dialog::backdrop {
-		background: #000a;
+		background: var(--surface);
 		backdrop-filter: blur(3px);
 	}
 	.drawer {
@@ -845,9 +718,9 @@
 		gap: 15px;
 	}
 	.drawer-top button {
-		border: 1px solid #555;
-		color: #eee;
-		background: #222;
+		border: 1px solid var(--border);
+		color: var(--ink);
+		background: var(--surface);
 		padding: 10px;
 		border-radius: 6px;
 	}
@@ -861,7 +734,7 @@
 		line-height: 1.6;
 	}
 	.detail-section {
-		border-top: 1px solid #38393f;
+		border-top: 1px solid var(--border);
 		padding: 24px 0;
 	}
 	.detail-section h3 {
@@ -871,14 +744,14 @@
 	}
 	.detail-section h4 {
 		font-size: 11px;
-		color: #ff9289;
+		color: var(--accent);
 		margin: 24px 0 12px;
 		letter-spacing: 1px;
 	}
 	.party {
 		padding: 16px;
-		background: #222328;
-		border: 1px solid #36373e;
+		background: var(--surface);
+		border: 1px solid var(--border);
 		border-radius: 8px;
 		margin-bottom: 10px;
 		font-size: 12px;
@@ -887,12 +760,12 @@
 	}
 	.party strong {
 		display: block;
-		color: #fff;
+		color: var(--ink);
 		margin-bottom: 5px;
 	}
 	.source-link {
 		display: inline-block;
-		color: #ff9289;
+		color: var(--accent);
 		font-size: 12px;
 		margin: 16px 0 24px;
 	}
@@ -907,7 +780,7 @@
 	dt {
 		font-size: 10px;
 		text-transform: uppercase;
-		color: #9b9da6;
+		color: var(--muted);
 		margin-bottom: 6px;
 	}
 	dd {
@@ -920,22 +793,6 @@
 		font-size: 12px;
 	}
 	@media (max-width: 720px) {
-		header {
-			padding: 16px 20px;
-			gap: 14px;
-			flex-wrap: wrap;
-		}
-		.brand {
-			font-size: 20px;
-		}
-		.brand small {
-			font-size: 8px;
-		}
-		nav {
-			gap: 16px;
-			width: 100%;
-			justify-content: flex-start;
-		}
 		main {
 			padding: 32px 16px;
 		}
@@ -999,7 +856,7 @@
 			display: grid;
 			grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 			padding: 16px;
-			border-top: 1px solid #343438;
+			border-top: 1px solid var(--border);
 			gap: 16px;
 		}
 		td {
@@ -1016,7 +873,7 @@
 			content: attr(data-label);
 			display: block;
 			font-size: 10px;
-			color: #90939e;
+			color: var(--muted);
 			margin-bottom: 5px;
 		}
 		.badge {
@@ -1028,15 +885,61 @@
 		.table-wrap {
 			overflow: visible;
 		}
-		.signin {
-			margin: 24px auto;
-			padding: 24px;
-		}
 		.drawer {
 			padding: 24px;
 		}
 		.drawer h2 {
 			font-size: 24px;
 		}
+	}
+
+	.metrics {
+		background: transparent;
+		border: 0;
+		gap: 14px;
+		overflow: visible;
+	}
+	.metrics > div {
+		background: white;
+		border: 1px solid var(--border);
+		border-top: 3px solid #0073ea;
+		border-radius: 8px;
+	}
+	.metrics > div:nth-child(2) {
+		border-top-color: #a080ed;
+	}
+	.metrics > div:nth-child(3) {
+		border-top-color: #26bba6;
+	}
+	.metrics > div:nth-child(4) {
+		border-top-color: #f0b84c;
+	}
+	.metrics > div:nth-child(5) {
+		border-top-color: #e88bb4;
+	}
+	.metrics strong {
+		font-weight: 650;
+	}
+
+	.badge {
+		background: #fff2d4;
+		color: #8b5e06;
+		border-color: #f2d9a4;
+	}
+	.badge.closed {
+		background: #f0f2f6;
+		color: var(--muted);
+		border-color: var(--border);
+	}
+	.detail-status.ready {
+		color: #16836b;
+	}
+	.inbox {
+		border-left: 3px solid #a080ed;
+	}
+	.error {
+		color: #b42341;
+		border-color: #ecc3cc;
+		background: #fff0f2;
 	}
 </style>

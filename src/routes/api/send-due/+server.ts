@@ -4,22 +4,14 @@ import { fetchDue } from '$lib/due';
 import { renderEmail } from '$lib/render';
 import { sendGmail } from '$lib/gmail';
 import { bumpFollowup } from '$lib/supabase';
+import { authorizeOutreach } from '$lib/server/outreach-auth';
 
 const BATCH = Number(env.BATCH_SIZE ?? 25);
 const SEND_DELAY_MS = Number(env.SEND_DELAY_MS ?? 300);
-const SEND_SECRET = env.SEND_DUE_SECRET || '';
 
 export const POST: RequestHandler = async ({ url, request }) => {
-	// Optional auth: if SEND_DUE_SECRET is configured, require it
-	if (SEND_SECRET) {
-		const auth = request.headers.get('authorization') ?? '';
-		if (auth !== `Bearer ${SEND_SECRET}`) {
-			return new Response(JSON.stringify({ ok: false, error: 'unauthorized' }), {
-				status: 401,
-				headers: { 'Content-Type': 'application/json' }
-			});
-		}
-	}
+	const denied = authorizeOutreach(request, env.SEND_DUE_SECRET);
+	if (denied) return denied;
 
 	const dryParam = (url.searchParams.get('dry') || '').toLowerCase();
 	const dry = dryParam === '1' || dryParam === 'true' || dryParam === 'yes';
@@ -56,8 +48,6 @@ export const POST: RequestHandler = async ({ url, request }) => {
 				// optional: pass through leadSource for template anecdotes
 				leadSource: row.lead?.lead_source ?? row.lead_source ?? undefined
 			};
-
-			console.log(rv, 'before renderEmail');
 
 			const { subject, html, text } = renderEmail(rv, stage, row.open_token ?? undefined);
 

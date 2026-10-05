@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { resolve } from '$app/paths';
 	import EstimateWorkspace from '$lib/components/EstimateWorkspace.svelte';
 	import { currency } from '$lib/domain/format';
 	let view = $state('estimate');
@@ -27,39 +26,27 @@
 </script>
 
 <svelte:head
-	><title>Rehab Calculator</title><meta name="theme-color" content="#0d0e10" /></svelte:head
+	><title>Rehab Calculator</title><meta name="theme-color" content="#f6f7fb" /></svelte:head
 >
 <div class="rehab-shell">
-	<header class="brand-bar">
-		<a href={resolve('/rehab')} class="brand" aria-label="Apex Rehab home"
-			><span class="brand-symbol" aria-hidden="true">Λ</span> APEX<span class="brand-sub"
-				>REHAB STUDIO</span
-			></a
-		><a href={resolve('/leads')} class="header-note">LEAD INBOX <span class="red-slash">↗</span></a
-		>
-	</header>
 	<main class="rehab-page">
 		<section class="hero">
 			<div>
-				<p class="eyebrow"><span class="red-slash">01 /</span> BUILT FOR YOUR NEXT MOVE</p>
-				<h1>Rehab Calculator<span>Potential. <em>Refined.</em></span></h1>
-				<p class="hero-copy">Walk the property. Define the scope.<br />See the possibilities.</p>
+				<p class="eyebrow">PROPERTY WORKSPACE</p>
+				<h1>
+					{view === 'estimate'
+						? 'Rehab Calculator'
+						: view === 'sms'
+							? 'Communications'
+							: 'Rehab workspace'}
+				</h1>
+				<p class="hero-copy">
+					{view === 'sms'
+						? 'Stay connected with your contacts and keep every conversation in one place.'
+						: 'Plan the work. Price every detail. Bring your next property to life.'}
+				</p>
 			</div>
-			<div class="hero-art" aria-hidden="true">
-				<svg viewBox="0 0 400 240" fill="none"
-					><path d="M30 170 188 55 364 118 205 229Z" stroke="#403b3b" /><path
-						d="m75 159 120-89 126 46-122 89Z"
-						stroke="#fa493e"
-					/><path
-						d="M75 159V105L195 16l126 46v54M195 16v54M321 62l-122 89-124-46M199 151v54"
-						stroke="#eee7dc"
-						stroke-width="1.4"
-					/><path d="m227 185 49-36v-43l-49 36Z" stroke="#716b66" /><path
-						d="m95 125 42 15v31l-42-15Z"
-						stroke="#716b66"
-					/><path d="M17 215h87m228-193h50" stroke="#fa493e" /></svg
-				><span>PROPERTY / REIMAGINED</span>
-			</div>
+			<span class="page-badge">✦ Rehab studio</span>
 		</section>
 		<EstimateWorkspace
 			project={estimator.project}

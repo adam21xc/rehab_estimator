@@ -35,3 +35,6 @@ __pycache__/
 
 # Supabase CLI cache (machine-local)
 supabase/.temp/
+
+# Private DealMachine pilot responses and reports
+.dealmachine-data/

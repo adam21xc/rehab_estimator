@@ -1,22 +1,33 @@
 import { expect, test } from '@playwright/test';
-test('create account is visible before credentials and opens a separate signup form', async ({
-	page
-}) => {
-	await page.setViewportSize({ width: 390, height: 844 });
+
+test('email code replaces passwords and opens a verified session', async ({ page }) => {
+	let signedIn = false;
+	await page.route('**/api/rehab/session', (route) => {
+		if (route.request().method() === 'GET')
+			return route.fulfill({
+				json: { user: signedIn ? { email: 'test@example.com' } : null, renderingEnabled: false }
+			});
+		const body = route.request().postDataJSON();
+		expect(body.password).toBeUndefined();
+		if (body.mode === 'send-code')
+			return route.fulfill({
+				json: { signedIn: false, message: 'Check your inbox for your sign-in code.' }
+			});
+		expect(body.code).toBe('123456');
+		signedIn = true;
+		return route.fulfill({ json: { signedIn: true } });
+	});
 	await page.goto('/rehab');
-	const create = page.getByRole('button', { name: 'Create account', exact: true });
-	await expect(create).toBeEnabled();
-	await create.click();
-	await expect(page.getByRole('heading', { name: 'Create your rehab account.' })).toBeVisible();
-	await expect(page.getByRole('button', { name: 'Create my account', exact: true })).toBeEnabled();
-	await expect(page.getByLabel('Password', { exact: true })).toHaveAttribute(
-		'autocomplete',
-		'new-password'
-	);
-	await expect(page.getByText(/not\s+your Gmail password/)).toBeVisible();
-	await page.getByRole('button', { name: 'Already have an account?' }).click();
-	await expect(page.getByRole('button', { name: 'Sign in to workspace' })).toBeVisible();
+	await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+	await expect(page.locator('input[type=password]')).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Create account', exact: true })).toHaveCount(0);
+	await page.getByLabel('Email', { exact: true }).fill('test@example.com');
+	await page.getByRole('button', { name: 'Send sign-in code' }).click();
+	await page.getByLabel('Sign-in code', { exact: true }).fill('123456');
+	await page.getByRole('button', { name: 'Open workspace' }).click();
+	await expect(page.getByText('Connected · test@example.com')).toBeVisible();
 });
+
 test('SMS workspace displays configuration status and keeps sending disabled', async ({ page }) => {
 	await page.route('**/api/rehab/session', (route) =>
 		route.fulfill({ json: { user: { email: 'test@example.com' }, renderingEnabled: true } })

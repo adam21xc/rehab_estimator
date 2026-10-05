@@ -1,6 +1,11 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
+	import { page as route } from '$app/state';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import SmsWorkspace from './SmsWorkspace.svelte';
+	import EmailSignIn from './EmailSignIn.svelte';
+	import PropertyImageLibrary from './PropertyImageLibrary.svelte';
 	import type { RehabProject } from '$lib/domain/types';
 	import { currency } from '$lib/domain/format';
 	let {
@@ -35,10 +40,9 @@
 	};
 	let user = $state<{ email: string } | null>(null);
 	let renderingEnabled = $state(false);
-	let email = $state('');
-	let password = $state('');
+
 	let authOpen = $state(false);
-	let authMode = $state<'signin' | 'signup'>('signin');
+
 	let busy = $state(false);
 	let message = $state('');
 	let failure = $state('');
@@ -80,22 +84,6 @@
 	onMount(() => {
 		void session();
 	});
-	async function auth(mode: 'signin' | 'signup') {
-		busy = true;
-		failure = '';
-		message = '';
-		try {
-			const data = await api('session', 'POST', { email, password, mode });
-			message = data.message;
-			password = '';
-			await session();
-			if (user) authOpen = false;
-		} catch (e) {
-			failure = (e as Error).message;
-		} finally {
-			busy = false;
-		}
-	}
 	async function logout() {
 		busy = true;
 		try {
@@ -130,11 +118,21 @@
 			busy = false;
 		}
 	}
-	async function changeView(next: string) {
-		view = next;
-		if (next === 'history') await loadHistory();
-		if (next === 'studio' && savedId) await refreshRenderings();
+	function changeView(next: string) {
+		void goto(resolve(`/rehab?view=${next}`), { noScroll: true, keepFocus: true });
 	}
+	$effect(() => {
+		const requested = route.url.searchParams.get('view') || 'estimate';
+		const next = ['estimate', 'history', 'studio', 'sms', 'gallery'].includes(requested)
+			? requested
+			: 'estimate';
+		view = next;
+		const signedIn = !!user;
+		untrack(() => {
+			if (next === 'history' && signedIn) void loadHistory();
+			if (next === 'studio' && savedId) void refreshRenderings();
+		});
+	});
 	async function save() {
 		if (!user) {
 			authOpen = true;
@@ -182,7 +180,7 @@
 			savedStamp = data.snapshot.meta.updatedAt;
 			photoId = '';
 			renderings = [];
-			view = 'estimate';
+			changeView('estimate');
 			message = 'Saved estimate opened. Saving edits creates a new version.';
 		} catch (e) {
 			failure = (e as Error).message;
@@ -202,7 +200,7 @@
 		savedStamp = '';
 		photoId = '';
 		renderings = [];
-		view = 'estimate';
+		changeView('estimate');
 		message = 'New estimate started.';
 		failure = '';
 	}
@@ -272,72 +270,28 @@
 	<span class="status-dot" class:online={!!user}></span><span
 		>{user
 			? `Connected · ${user.email}`
-			: 'Local draft · Save across devices with a free workspace account'}</span
+			: 'Local draft · Sign in with an email code to save across devices'}</span
 	>
 	{#if user}<button disabled={busy || generating} onclick={logout}>Sign out</button>{:else}
-		<div class="button-row">
-			<button
-				class="secondary-button"
-				disabled={busy}
-				onclick={() => {
-					authMode = 'signin';
-					authOpen = true;
-				}}>Sign in</button
-			><button
-				class="primary-button"
-				disabled={busy}
-				onclick={() => {
-					authMode = 'signup';
-					authOpen = true;
-				}}>Create account</button
-			>
-		</div>
+		<button
+			class="secondary-button"
+			disabled={busy}
+			onclick={() => {
+				authOpen = true;
+				failure = '';
+				message = '';
+			}}>Sign in</button
+		>
 	{/if}
 </div>
 {#if message}<p role="status" class="notice">{message}</p>{/if}
 {#if failure}<p role="alert" class="notice error">{failure}</p>{/if}
-{#if authOpen && !user}
-	<form
-		class="surface auth-panel"
-		onsubmit={(e) => {
-			e.preventDefault();
-			auth(authMode);
+{#if authOpen && !user}<EmailSignIn
+		onSignedIn={async () => {
+			await session();
+			if (user) authOpen = false;
 		}}
-	>
-		<p class="eyebrow">YOUR PRIVATE WORKSPACE</p>
-		<h2>{authMode === 'signup' ? 'Create your rehab account.' : 'Welcome back.'}</h2>
-		<p class="muted">
-			This account is just for the rehab app. Use your email address and a new, unique password—not
-			your Gmail password.
-		</p>
-		<label>Email<input type="email" autocomplete="email" bind:value={email} required /></label>
-		<label
-			>Password<input
-				type="password"
-				autocomplete={authMode === 'signup' ? 'new-password' : 'current-password'}
-				bind:value={password}
-				minlength="8"
-				required
-			/></label
-		>
-		<div class="button-row">
-			<button class="primary-button" disabled={busy}
-				>{busy
-					? 'Working…'
-					: authMode === 'signup'
-						? 'Create my account'
-						: 'Sign in to workspace'}</button
-			>
-			<button
-				type="button"
-				class="secondary-button"
-				disabled={busy}
-				onclick={() => (authMode = authMode === 'signup' ? 'signin' : 'signup')}
-				>{authMode === 'signup' ? 'Already have an account?' : 'Create an account instead'}</button
-			>
-		</div>
-	</form>
-{/if}
+	/>{/if}
 {#if view === 'history'}
 	<section class="workspace-section">
 		<p class="eyebrow">THE ARCHIVE</p>
@@ -375,7 +329,7 @@
 		</p>
 		{#if !photos.length}<div class="empty-state">
 				Start with a photo.<span>Add a photo to any repair item, then save your estimate.</span
-				><button class="secondary-button" onclick={() => (view = 'estimate')}
+				><button class="secondary-button" onclick={() => changeView('estimate')}
 					>Back to estimate →</button
 				>
 			</div>{:else}
@@ -454,3 +408,8 @@
 {/if}
 
 {#if view === 'sms'}{#key user?.email}<SmsWorkspace signedIn={!!user} />{/key}{/if}
+
+{#if view === 'gallery'}{#key user?.email}<PropertyImageLibrary
+			signedIn={!!user}
+			onOpen={openEstimate}
+		/>{/key}{/if}

@@ -3,6 +3,11 @@
 Reviewed September 29, 2026. This is a proposed implementation plan, not a claim that
 CRM features or daily jobs have been deployed.
 
+For the current implementation, see the [README](../README.md) and
+[October 2 codebase review](CODEBASE_REVIEW.md). Cloud history, Twilio SMS and the
+Accela ingestion worker were implemented after this plan; their earlier gaps below
+are historical. The canonical CRM entities and source-linking plan remain pending.
+
 ## Verified starting point
 
 | Component       | What exists                                                                                                     | What still needs connecting                                                                                           |

@@ -1,6 +1,7 @@
 import type { RequestHandler } from '@sveltejs/kit';
 import { google } from 'googleapis';
 import { env } from '$env/dynamic/private';
+import { authorizeOutreach } from '$lib/server/outreach-auth';
 
 function b64url(s: string) {
 	return Buffer.from(s)
@@ -11,6 +12,8 @@ function b64url(s: string) {
 }
 
 export const POST: RequestHandler = async ({ request }) => {
+	const denied = authorizeOutreach(request, env.SEND_DUE_SECRET);
+	if (denied) return denied;
 	let body: Record<string, unknown>;
 	try {
 		body = await request.json();
@@ -21,6 +24,9 @@ export const POST: RequestHandler = async ({ request }) => {
 		});
 	}
 
+	if (!body || typeof body !== 'object') {
+		return new Response(JSON.stringify({ error: 'Invalid JSON object' }), { status: 400 });
+	}
 	const to = body.to;
 	if (typeof to !== 'string' || !to.trim()) {
 		return new Response(
@@ -48,7 +54,13 @@ export const POST: RequestHandler = async ({ request }) => {
 		typeof body.message === 'string' && body.message.trim()
 			? body.message
 			: 'Hello from your server!';
-	const html = `<p>${text}</p>`;
+	if (/[\r\n]/.test(subject)) {
+		return new Response(JSON.stringify({ error: 'Subject must be a single line' }), {
+			status: 400,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	}
+	const html = `<p>${text.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!)}</p>`;
 
 	const oauth2 = new google.auth.OAuth2(
 		env.GMAIL_CLIENT_ID,
