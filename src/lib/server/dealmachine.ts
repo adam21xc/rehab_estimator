@@ -1,3 +1,4 @@
+import { foreclosureEvidence } from './foreclosure-matching';
 import { createHash } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -24,13 +25,38 @@ export function normalizeValue(value: unknown): unknown {
  return value;
 }
 const nameKey = (s: string) => s.toUpperCase().replace(/[^A-Z0-9 ]/g,' ').split(/\s+/).filter(x=>x.length>1).sort().join(' ');
+export const isEviction = (source: Data) => source.source === 'mycase' && ['EV','EVSC','EVCD'].includes(source.record_type);
+export function evictionEvidence(source: Data, result: Data = {}) {
+ if (!isEviction(source)) return null;
+ const record = source.source_record || {};
+ const names = (role: string, primary: string) => [...new Set([
+  ...(record.parties || []).filter((p: Data) => p.role_code === role || p.role === (role === 'PL' ? 'Plaintiff' : 'Defendant')).map((p: Data) => p.name),
+  record[primary]
+ ].filter((n): n is string => typeof n === 'string' && !!n.trim()))];
+ const plaintiffs = names('PL','primary_plaintiff_name');
+ const defendants = names('DF','primary_defendant_name');
+ const owners = [result.owner_1_full_name,result.owner_2_full_name].filter((n): n is string => typeof n === 'string' && !!n.trim());
+ const plaintiffMatchesOwner = owners.length && plaintiffs.length ? plaintiffs.some(n => owners.some(o => nameKey(n) === nameKey(o))) : null;
+ return {plaintiffs, defendants, owners, plaintiffMatchesOwner,
+  note: !owners.length ? 'Confirm the rental address to look up its owner and owner contact candidates.' : plaintiffMatchesOwner ? 'The plaintiff name supports the provider owner match.' : 'The plaintiff may be a manager or another landlord-side entity. A different name does not by itself invalidate the property match.',
+  contactNote: 'Contact candidates come from property-owner enrichment, not the tenant list. LLC-associated individuals still need their relationship verified.'};
+}
 export function reviewReasons(source: Data, result: Data): string[] {
  const reasons: string[] = [];
  if (!['subject_property','reviewed_subject_property'].includes(source.address_role)) reasons.push('Court party address is not a verified subject property.');
  if (addressKey(source.candidate_address || '') !== addressKey(result.full_address || '')) reasons.push('Returned address differs from the submitted address; verify units and parcel.');
  const sourceNames: string[] = source.source_record.source_names || [];
  const owners = [result.owner_1_full_name,result.owner_2_full_name].filter(Boolean).map(nameKey);
- if (!sourceNames.length || !owners.length || sourceNames.some(n=>!owners.includes(nameKey(n)))) reasons.push('Source owner or party names differ from provider ownership; review the relationship.');
+ if (isEviction(source)) {
+  if (!owners.length) reasons.push('Provider did not identify a property owner; review before using contact candidates.');
+ } else if (source.source === 'mycase' && source.record_type === 'MF') {
+  const evidence = foreclosureEvidence(source,result)!;
+  if (!evidence.owners.length || !evidence.matches.length) reasons.push('No provider owner matches a named foreclosure defendant; review ownership and the subject property.');
+  else {
+   reasons.push('Likely match—owner name agrees with a foreclosure defendant; confirm the subject property.');
+   if (evidence.unmatchedOwners.length) reasons.push('Additional provider owners do not match named defendants; review co-ownership.');
+  }
+ } else if (!sourceNames.length || !owners.length || sourceNames.some(n=>!owners.includes(nameKey(n)))) reasons.push('Source owner or party names differ from provider ownership; review the relationship.');
  if (result.match_warning) reasons.push('Provider returned an address-match warning.');
  if (result.estimated_value > 0 && result.estimated_equity_amount != null && result.estimated_equity_percentage != null &&
   Math.abs(100*result.estimated_equity_amount/result.estimated_value-result.estimated_equity_percentage)>2) reasons.push('Provider equity percentage conflicts with its dollar estimates.');
@@ -82,6 +108,7 @@ export async function enrichReady(db:SupabaseClient,key:string,limit=5,request: 
  const stats={processed:0,cache_hits:0,api_requests:0,credits:0,pending:0};
  for (const source of rows) {
   if(!source.candidate_address) continue;
+  if(isEviction(source) && !['subject_property','reviewed_subject_property'].includes(source.address_role)) continue;
   const ck=cacheKey(source.candidate_address);
   let cached=checked(await db.from('dm_requests').select('*').eq('cache_key',ck).maybeSingle());
   if (!cached) {

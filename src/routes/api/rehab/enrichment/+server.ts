@@ -1,7 +1,9 @@
+import { filingDate } from '$lib/mycase/records';
+import { foreclosureEvidence } from '$lib/server/foreclosure-matching';
 import { json, error } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import { requireUser, authClient, readJson, sameOrigin } from '$lib/server/rehab-auth';
-import { enrichReady } from '$lib/server/dealmachine';
+import { enrichReady, evictionEvidence } from '$lib/server/dealmachine';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async (event) => {
@@ -13,14 +15,14 @@ export const GET: RequestHandler = async (event) => {
   if(!r.data) error(404,'Record not found.');
   const contacts=r.data.property_id?await db.from('dm_property_contacts').select('role,contact:dm_contacts(id,data,observed_at)').eq('property_id',r.data.property_id):{data:[],error:null};
   if(contacts.error) error(503,'Contact details are unavailable.');
-  return json({record:r.data,contacts:contacts.data});
+  return json({record:r.data,contacts:contacts.data,foreclosure:foreclosureEvidence(r.data,r.data.property?.raw_data || r.data.property?.facts || {}),eviction:evictionEvidence(r.data,r.data.property?.raw_data || r.data.property?.facts || {})});
  }
  const [links,requests]=await Promise.all([
   db.from('dm_source_links').select('id,source,source_id,record_type,county,candidate_address,address_role,status,review_reasons,reviewed_at,source_record,property:dm_properties(id,facts,estimates,observed_at)').eq('rollout_id','initial-100').order('created_at').limit(100),
   db.from('dm_requests').select('status,credits')
  ]);
  if(links.error||requests.error) error(503,'Enrichment records are unavailable.');
- const records=(links.data||[]).map(({source_record,...r})=>({...r,source_names:source_record.source_names?.length ? source_record.source_names : [source_record.primary_plaintiff_name].filter(Boolean)}));
+ const records=(links.data||[]).map(({source_record,...r})=>({...r,file_date:filingDate(source_record.file_date || source_record.filed_date || null),foreclosure:foreclosureEvidence({...r,source_record}, (Array.isArray(r.property)?r.property[0]:r.property)?.facts || {}),eviction:evictionEvidence({...r,source_record}, (Array.isArray(r.property)?r.property[0]:r.property)?.facts || {}),source_names:source_record.source_names?.length ? source_record.source_names : [source_record.primary_plaintiff_name].filter(Boolean)}));
  return json({records,leadLimit:100,credits:(requests.data||[]).reduce((n,r)=>n+r.credits,0),pendingRequests:(requests.data||[]).filter(r=>r.status==='pending').length});
 };
 export const POST: RequestHandler = async(event)=>{
