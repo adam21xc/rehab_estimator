@@ -1,10 +1,16 @@
 <script lang="ts">
+	import {
+		MAP_ICONS,
+		recordIcon,
+		iconSvg,
+		streetView,
+		type MapIcon
+	} from '$lib/intelligence/map-icons';
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import type mapboxgl from 'mapbox-gl';
 	import 'mapbox-gl/dist/mapbox-gl.css';
 	import {
-		canGeocode,
 		filterProperties,
 		SOURCE_LABELS,
 		SOURCE_COLORS,
@@ -31,14 +37,13 @@
 		to = $state(''),
 		query = $state(''),
 		multiple = $state(false);
+	let imageFailed = $state(false);
+	const mycaseIcons: MapIcon[] = ['MF', 'EU', 'EVSC', 'EVCD'];
 	let selectedKey = $state(''),
 		activeRecord = $state(''),
 		colocated = $state<string[]>([]),
 		listPage = $state(1);
-	let geocoding = $state(false),
-		progress = $state(''),
-		stop = false,
-		disposed = false;
+	let disposed = false;
 	let container: HTMLDivElement;
 	let map: mapboxgl.Map | undefined, sdk: typeof mapboxgl, resize: ResizeObserver | undefined;
 	let markers: mapboxgl.Marker[] = [];
@@ -48,16 +53,7 @@
 	);
 	const located = $derived(filtered.filter((p) => p.coordinates));
 	const selected = $derived(filtered.find((p) => p.key === selectedKey));
-	const waiting = $derived(
-		data?.properties.filter(
-			(p) => ['missing', 'pending'].includes(p.locationStatus) && canGeocode(p.address)
-		).length || 0
-	);
-	const reviewCount = $derived(
-		data?.properties.filter(
-			(p) => ['review', 'failed'].includes(p.locationStatus) || !canGeocode(p.address)
-		).length || 0
-	);
+	const waiting = $derived(data?.properties.filter((p) => !p.coordinates).length || 0);
 	const multiSource = $derived(filtered.filter((p) => sourceCount(p) > 1).length);
 	const allSources: Source[] = ['accela', 'mycase', 'sales'];
 	const money = (n: number) =>
@@ -94,6 +90,7 @@
 		markers = [];
 	}
 	function select(property: Property) {
+		imageFailed = false;
 		selectedKey = property.key;
 		activeRecord = '';
 		if (property.coordinates && map)
@@ -129,7 +126,7 @@
 		records.forEach((record, i) => {
 			const button = document.createElement('button');
 			button.className = 'map-indicator';
-			button.textContent = String(i + 1);
+			button.innerHTML = iconSvg(recordIcon(record));
 			button.style.background = SOURCE_COLORS[record.source];
 			button.setAttribute(
 				'aria-label',
@@ -161,7 +158,7 @@
 			map = new sdk.Map({
 				container,
 				accessToken: data.token,
-				style: 'mapbox://styles/mapbox/dark-v11',
+				style: 'mapbox://styles/mapbox/outdoors-v12',
 				center: [-86.1581, 39.7684],
 				zoom: 10
 			});
@@ -170,9 +167,24 @@
 				mapProblem =
 					'The basemap could not load. Check the Mapbox token and allowed URLs. The address list remains available.';
 			});
-			map.on('load', () => {
+			map.on('load', async () => {
 				if (!map) return;
 				mapProblem = '';
+				await Promise.all(
+					(Object.keys(MAP_ICONS) as MapIcon[]).map(
+						(icon) =>
+							new Promise<void>((done) => {
+								const image = new Image(48, 48);
+								image.onload = () => {
+									if (!disposed && map) map.addImage(icon, image, { pixelRatio: 2 });
+									done();
+								};
+								image.onerror = () => done();
+								image.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(iconSvg(icon));
+							})
+					)
+				);
+				if (disposed || !map) return;
 				map.addSource('properties', {
 					type: 'geojson',
 					data: toGeoJSON([]),
@@ -207,9 +219,21 @@
 					filter: ['!', ['has', 'point_count']],
 					paint: {
 						'circle-color': ['get', 'color'],
-						'circle-radius': ['case', ['>', ['get', 'count'], 1], 11, 7],
+						'circle-radius': 16,
 						'circle-stroke-color': '#111520',
 						'circle-stroke-width': 2
+					}
+				});
+				map.addLayer({
+					id: 'property-icons',
+					type: 'symbol',
+					source: 'properties',
+					filter: ['!', ['has', 'point_count']],
+					layout: {
+						'icon-image': ['get', 'icon'],
+						'icon-size': 0.85,
+						'icon-allow-overlap': true,
+						'icon-ignore-placement': true
 					}
 				});
 				map.addLayer({
@@ -220,9 +244,10 @@
 					layout: {
 						'text-field': ['to-string', ['get', 'count']],
 						'text-size': 11,
+						'text-offset': [1.4, -1.4],
 						'text-allow-overlap': true
 					},
-					paint: { 'text-color': '#12131a' }
+					paint: { 'text-color': '#12131a', 'text-halo-color': '#ffffff', 'text-halo-width': 2 }
 				});
 				map.on('click', 'clusters', (event) => {
 					const feature = event.features?.[0];
@@ -274,34 +299,10 @@
 		void multiple;
 		listPage = 1;
 	});
-	async function locateMissing() {
-		geocoding = true;
-		stop = false;
-		problem = '';
-		let total = 0;
-		try {
-			while (!stop && !disposed) {
-				const response = await fetch('/api/rehab/map', { method: 'POST' });
-				const result = await response.json();
-				if (!response.ok) throw new Error(result.message || 'Unable to locate addresses.');
-				total += result.attempted;
-				progress = `${total.toLocaleString()} addresses checked this run. Coordinates saved for reuse.`;
-				await refresh();
-				if (!result.attempted || !result.remaining) break;
-			}
-		} catch (e) {
-			problem = (e as Error).message;
-			await refresh().catch(() => {});
-			problem = (e as Error).message;
-		} finally {
-			geocoding = false;
-		}
-	}
 	onMount(() => {
 		void refresh();
 		return () => {
 			disposed = true;
-			stop = true;
 			resize?.disconnect();
 			clearSpiders();
 			map?.remove();
@@ -316,7 +317,7 @@
 			<h2>The signals, on the map.</h2>
 			<p>Explore court records, code enforcement, and recorded sales together.</p>
 		</div>
-		<button onclick={refresh} disabled={loading || geocoding}
+		<button onclick={refresh} disabled={loading}
 			>{loading ? 'Refreshing…' : 'Refresh records'}</button
 		>
 	</header>
@@ -349,8 +350,7 @@
 		</p>{/if}
 	{#if problem}<p class="notice" role="alert">{problem}</p>{/if}
 	{#if data && !data.cacheReady}<p class="notice">
-			Location storage needs to be connected before addresses can be placed on the map. Source
-			records are available below.
+			Some saved location sources are unavailable. Records without coordinates remain in the list.
 		</p>{/if}
 	<div class="map-summary" aria-live="polite">
 		<span
@@ -376,9 +376,16 @@
 							: 'No addresses match these filters.'}
 				</div>{/if}
 			<div class="map-key">
-				<span><i style="background:#ebeff9"></i>Multiple sources</span><span
-					>Numbers on pins = records</span
-				>
+				{#each mycaseIcons as icon}<span
+						><svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"
+							><path
+								d={MAP_ICONS[icon].path}
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.8"
+							/></svg
+						>{MAP_ICONS[icon].label}</span
+					>{/each}<span>Stack = multiple record types</span><span>Numbers = records</span>
 			</div>
 		</div>
 		<aside aria-label="Selected property">
@@ -400,6 +407,21 @@
 							? 'Location needs review'
 							: 'Not mapped yet'}
 				</p>
+				{@const view = streetView(selected.coordinates)}
+				{#if view}<div class="street-view">
+						{#if !imageFailed}<img
+								src={view.image}
+								alt={`Street-level view near ${selected.address}`}
+								onerror={() => (imageFailed = true)}
+							/>{:else}<p>Street View preview unavailable for this location.</p>{/if}
+						<a href={view.link} target="_blank" rel="noopener noreferrer"
+							>Open Google Street View ↗</a
+						>
+						<p>
+							Imagery via DealMachine. May show a nearby location or an older view; confirm the
+							address before relying on it.
+						</p>
+					</div>{:else}<p class="caution">Street View needs a saved property location.</p>{/if}
 				{#if colocated.length > 1}<div class="nearby">
 						<strong>Also at this point</strong
 						>{#each filtered.filter((p) => colocated.includes(p.key) && p.key !== selectedKey) as other (other.key)}<button
@@ -413,6 +435,14 @@
 							style={`--source:${SOURCE_COLORS[record.source]}`}
 						>
 							<div class="record-source">
+								<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"
+									><path
+										d={MAP_ICONS[recordIcon(record)].path}
+										fill="none"
+										stroke="currentColor"
+										stroke-width="1.8"
+									/></svg
+								>
 								{i + 1} · {SOURCE_LABELS[record.source]}<time
 									>{record.date || 'Date unavailable'}</time
 								>
@@ -455,28 +485,17 @@
 		<div>
 			<strong>Saved locations, reused on every visit.</strong>
 			<p>
-				{waiting.toLocaleString()} addresses awaiting lookup · {reviewCount.toLocaleString()} need address
-				or match review · {data?.missingAddresses.toLocaleString() || 0} records without an address.
+				{waiting.toLocaleString()} addresses without saved coordinates · {data?.missingAddresses.toLocaleString() ||
+					0} records without an address.
 			</p>
 		</div>
-		{#if geocoding}<button
-				onclick={() => {
-					stop = true;
-					progress = 'Stopping after the current batch…';
-				}}>Stop locating</button
-			>{:else}<button
-				class="primary"
-				onclick={locateMissing}
-				disabled={!data?.cacheReady || !data?.token || !waiting}>Locate missing addresses</button
-			>{/if}
 	</footer>
-	{#if progress}<p class="progress" role="status">{progress}</p>{/if}
 	<p class="coverage-note">
 		The map opens over Indianapolis. Use “Fit visible results” to include all matching locations,
-		including out-of-state defendant addresses. Address lookups use Mapbox permanent geocoding and
-		may incur usage charges. Only confident street-address matches are pinned. Filters use filing
-		dates for cases and sale dates for transfers; undated records are excluded when a date range is
-		set.
+		including out-of-state defendant addresses. New locations use saved DealMachine coordinates.
+		Previously saved locations remain available. Paid Mapbox address lookups are disabled. Filters
+		use filing dates for cases and sale dates for transfers; undated records are excluded when a
+		date range is set.
 	</p>
 	{#if data?.salesCoverage}<p class="coverage-note">
 			Gateway coverage: Marion County, {data.salesCoverage.from || 'unknown start'} through {data
@@ -566,11 +585,6 @@
 	button:disabled {
 		opacity: 0.45;
 		cursor: default;
-	}
-	button.primary {
-		background: #8b6cef;
-		color: white;
-		border-color: #8b6cef;
 	}
 	.map-filters {
 		padding: 0 24px 20px;
@@ -670,7 +684,7 @@
 		position: relative;
 		min-width: 0;
 		height: 520px;
-		background: #10121b;
+		background: #e6ebdd;
 	}
 	.map-canvas {
 		height: 100%;
@@ -691,13 +705,15 @@
 		pointer-events: none;
 	}
 	.map-key {
+		max-width: calc(100% - 40px);
 		display: flex;
 		flex-wrap: wrap;
 		gap: 14px;
 		position: absolute;
 		bottom: 36px;
 		left: 12px;
-		background: #161820e8;
+		background: #fffffff0;
+		color: #253a32;
 		padding: 8px 10px;
 		border-radius: 6px;
 		font-size: 10px;
@@ -707,11 +723,6 @@
 		display: flex;
 		align-items: center;
 		gap: 6px;
-	}
-	.map-key i {
-		width: 7px;
-		height: 7px;
-		border-radius: 50%;
 	}
 	aside {
 		padding: 20px;
@@ -815,13 +826,9 @@
 		font-size: 11px;
 		margin-top: 5px;
 	}
-	.coverage-note,
-	.progress {
+	.coverage-note {
 		padding: 0 24px 12px;
 		font-size: 11px;
-	}
-	.progress {
-		color: #c5b5f4;
 	}
 	.address-list {
 		border-top: 1px solid #33343f;
@@ -861,6 +868,29 @@
 		gap: 10px;
 		margin-top: 15px;
 		font-size: 11px;
+	}
+	.street-view {
+		margin-top: 14px;
+	}
+	.street-view img {
+		width: 100%;
+		height: auto;
+		border-radius: 8px;
+		display: block;
+	}
+	.street-view a {
+		color: #c5b7ff;
+		font-size: 12px;
+		display: block;
+		margin: 8px 0;
+	}
+	.street-view p {
+		font-size: 11px;
+	}
+	:global(.map-indicator svg) {
+		width: 20px;
+		height: 20px;
+		vertical-align: middle;
 	}
 	:global(.map-indicator) {
 		width: 28px;

@@ -1,3 +1,4 @@
+import { propertyIcon } from './map-icons';
 import { filingDate } from '$lib/mycase/records';
 
 export type Source = 'accela' | 'mycase' | 'sales';
@@ -18,6 +19,7 @@ export type Indicator = {
 	date: string | null;
 	title: string;
 	status?: string;
+	caseType?: string;
 	parcel?: string;
 	buyer?: string;
 	seller?: string;
@@ -152,6 +154,7 @@ export function toGeoJSON(properties: Property[]): GeoJSON.FeatureCollection<Geo
 				geometry: { type: 'Point', coordinates: p.coordinates! },
 				properties: {
 					key: p.key,
+					icon: propertyIcon(p.records),
 					count: p.records.length,
 					color: sourceCount(p) > 1 ? '#ebeff9' : SOURCE_COLORS[p.records[0].source]
 				}

@@ -1,0 +1,31 @@
+name: Gateway weekly sales refresh
+on:
+  schedule:
+    # Monday 9:37 a.m. EDT / 8:37 a.m. EST. No daylight-saving skip guard.
+    - cron: '37 13 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: gateway-sales-import
+  cancel-in-progress: false
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Test complete-snapshot fetch and resume behavior
+        run: python3 -m unittest discover -s tests/sales -v
+      - name: Fetch fresh Marion County 2026 sales
+        run: python3 scripts/sales/fetch.py
+      - name: Publish validated complete snapshot
+        env:
+          PUBLIC_SUPABASE_URL: ${{ secrets.ACCELA_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.ACCELA_SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/sales/import.mjs

@@ -70,8 +70,12 @@ the email send script sends real messages and is not part of `npm test`.
 
 ## Current implementation boundaries
 
-The lead and sales pages are read-only views, not a finished CRM pipeline. MyCase is connected through the existing scraper’s `indiana_cases` table. The current sales snapshot has sale dates
-through July 31, 2026 and is not refreshed by a scheduled worker. To refresh manually,
+The lead and sales pages are read-only views, not a finished CRM pipeline. MyCase is connected through the existing scraper’s `indiana_cases` table. Gateway sales refresh every Monday at 13:37 UTC (9:37 a.m. EDT / 8:37 a.m. EST)
+through `.github/workflows/gateway-sales.yml`, with no daylight-saving skip guard.
+The scope remains Marion County / 2026; Gateway reporting may lag. Only a complete,
+count-verified snapshot replaces the displayed data. The workflow uses the existing
+`ACCELA_SUPABASE_URL` and `ACCELA_SUPABASE_SERVICE_ROLE_KEY` repository secrets.
+Manual dispatch is also available in GitHub Actions. To refresh locally,
 run `python3 scripts/sales/fetch.py`, then `node scripts/sales/import.mjs`. A normal
 fetch starts fresh; use `python3 scripts/sales/fetch.py --resume` only for an
 interrupted download. Run `python3 -m unittest discover -s tests/sales -v` to check
@@ -83,7 +87,7 @@ scheduled invocations have completed successfully, including October 2, 2026.
 GitHub may delay or skip scheduled runs, so the hourly cron is not an exact-time guarantee. The configured import window remains 7 a.m.–7 p.m.
 America/Indiana/Indianapolis (Eastern time, including daylight saving); changing computers does not change that schedule.
 It runs on GitHub-hosted workers, so the Mac Mini does not need to stay on for Accela ingestion.
-Avoid installing a duplicate local Accela schedule. Gateway sales refresh is still manual;
+Avoid installing duplicate local Accela or Gateway schedules;
 email/SMS outreach is not automatically enabled by cloning the repository.
 
 This is suitable for local development, not an approval to expose the entire app

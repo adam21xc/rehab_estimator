@@ -38,3 +38,8 @@ it('requires authentication on same-origin geocoding', async () => {
 	await expect(POST(event)).rejects.toMatchObject({ status: 401 });
 	expect(mocks.geocode).not.toHaveBeenCalled();
 });
+
+it('rejects authenticated legacy lookup requests', async () => {
+	mocks.geocode.mockRejectedValue({ status: 410 });
+	await expect(POST(event)).rejects.toMatchObject({ status: 410 });
+});

@@ -1,3 +1,4 @@
+import { dealMachineLocation } from '$lib/intelligence/saved-coordinates';
 import { error } from '@sveltejs/kit';
 import { authClient } from './rehab-auth';
 import { loadSalesSnapshot } from './sales-data';
@@ -56,6 +57,7 @@ async function readSources() {
 			source: 'mycase' as const,
 			address: r.primary_defendant_address || '',
 			date: r.file_date,
+			caseType: r.case_type_code,
 			title: CASE_TYPES[r.case_type_code] || r.case_type || 'Court record',
 			status: r.status || '',
 			addressRole: 'defendant' as const
@@ -140,6 +142,54 @@ export async function loadPropertyMap() {
 			Number.isFinite(location.latitude)
 		)
 			property.coordinates = [location.longitude!, location.latitude!];
+	}
+	// Reuse enrichment already purchased; never call the provider from map reads.
+	const dmLocations = new Map<string, [number, number]>();
+	const conflicts = new Set<string>();
+	for (let start = 0; ; start += 1000) {
+		const result = await db
+			.from('dm_source_links')
+			.select(
+				'id,candidate_address,property:dm_properties(facts,match_warning:raw_data->match_warning)'
+			)
+			.in('status', ['accepted', 'review'])
+			.order('id')
+			.range(start, start + 999);
+		if (result.error) {
+			if (['PGRST205', '42P01', 'PGRST200'].includes(result.error.code)) {
+				cacheReady = false;
+				break;
+			}
+			error(503, 'Saved DealMachine locations are temporarily unavailable.');
+		}
+		for (const row of result.data || []) {
+			const property = row.property as unknown as {
+				facts: Record<string, unknown>;
+				match_warning?: unknown;
+			} | null;
+			if (!property) continue;
+			const location = dealMachineLocation(
+				row.candidate_address || '',
+				property.facts,
+				property.match_warning
+			);
+			if (!location) continue;
+			const previous = dmLocations.get(location.key);
+			if (
+				previous &&
+				(previous[0] !== location.coordinates[0] || previous[1] !== location.coordinates[1])
+			)
+				conflicts.add(location.key);
+			dmLocations.set(location.key, location.coordinates);
+		}
+		if ((result.data?.length || 0) < 1000) break;
+	}
+	for (const property of data.properties) {
+		const coordinates = dmLocations.get(property.key);
+		if (coordinates && !conflicts.has(property.key)) {
+			property.coordinates = coordinates;
+			property.locationStatus = 'matched';
+		}
 	}
 	return { ...data, cacheReady };
 }
