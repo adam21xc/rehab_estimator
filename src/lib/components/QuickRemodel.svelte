@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import AddressAutocomplete from './AddressAutocomplete.svelte';
 	import { studioProject } from '$lib/domain/studio';
 	import type { PhotoRef, RehabProject } from '$lib/domain/types';
 	let { signedIn, enabled }: { signedIn: boolean; enabled: boolean } = $props();
@@ -7,6 +8,7 @@
 	let photo = $state<PhotoRef | null>(null);
 	let address = $state('');
 	let searchAddress = $state('');
+	let searchCoordinates = $state<[number, number] | null>(null);
 	let lookupAddress = $state('');
 	let warning = $state('');
 	let streetLink = $state('');
@@ -104,7 +106,10 @@
 		problem = '';
 		message = 'Loading a Street View photo…';
 		try {
-			const value = await api('studio/street-view', { address: searchAddress });
+			const value = await api('studio/street-view', {
+				address: searchAddress,
+				coordinates: searchCoordinates || undefined
+			});
 			resetPhoto({
 				id: crypto.randomUUID(),
 				categoryKey: 'studio',
@@ -250,16 +255,20 @@
 				</label>
 			{:else}
 				<div class="lookup">
-					<label
-						>Property to look up<input
-							bind:value={searchAddress}
-							disabled={busy}
-							placeholder="Street address, city, state and ZIP"
-						/></label
-					><button disabled={!signedIn || busy || searchAddress.trim().length < 8} onclick={lookup}
+					<AddressAutocomplete
+						label="Property to look up"
+						bind:value={searchAddress}
+						disabled={busy || !signedIn}
+						onedit={() => (searchCoordinates = null)}
+						onselect={(suggestion) => (searchCoordinates = suggestion.coordinates)}
+					/>
+					<button disabled={!signedIn || busy || searchAddress.trim().length < 8} onclick={lookup}
 						>Load Street View photo</button
 					>
-					<p>Saved locations are reused. A new address lookup may use DealMachine credits.</p>
+					<p>
+						Choose a suggestion to load its Street View location. Manual address lookup may use
+						DealMachine credits.
+					</p>
 				</div>
 			{/if}
 			{#if photo}<figure>

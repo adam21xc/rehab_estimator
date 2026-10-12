@@ -9,14 +9,15 @@ export const POST: RequestHandler = async (event) => {
 	sameOrigin(event);
 	await requireUser(event);
 	const input = z
-		.object({ address: z.string().trim().min(8).max(256) })
+		.object({
+			address: z.string().trim().min(8).max(256),
+			coordinates: z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)]).optional()
+		})
 		.safeParse(await readJson(event, 2048));
 	if (!input.success) error(400, 'Enter a full street address, city, state and ZIP.');
-	const location = await findStudioLocation(
-		authClient(),
-		input.data.address,
-		env.DEALMACHINE_API_KEY || ''
-	);
+	const location = input.data.coordinates
+		? { address: input.data.address, coordinates: input.data.coordinates, warning: undefined }
+		: await findStudioLocation(authClient(), input.data.address, env.DEALMACHINE_API_KEY || '');
 	const view = streetView(location.coordinates)!;
 	// Fetch only our constructed provider URL; clients cannot make arbitrary server requests.
 	const response = await fetch(view.image, {

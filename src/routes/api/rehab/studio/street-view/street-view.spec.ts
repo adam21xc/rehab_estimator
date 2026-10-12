@@ -33,3 +33,33 @@ it('rejects oversized address input before looking it up', async () => {
 	await expect(POST(event)).rejects.toMatchObject({ status: 400 });
 	expect(mocks.lookup).not.toHaveBeenCalled();
 });
+it('uses selected Mapbox coordinates without a second paid property lookup', async () => {
+	mocks.body.mockResolvedValue({
+		address: '123 Main St, Indianapolis IN 46201',
+		coordinates: [-86, 39]
+	});
+	const request = vi
+		.spyOn(globalThis, 'fetch')
+		.mockResolvedValue(
+			new Response(new Uint8Array([1, 2, 3]), { headers: { 'content-type': 'image/jpeg' } })
+		);
+	try {
+		const body = await (await POST(event)).json();
+		expect(mocks.lookup).not.toHaveBeenCalled();
+		expect(request).toHaveBeenCalledWith(
+			'https://img.dealmachine.com/sv/39,-86.jpg',
+			expect.any(Object)
+		);
+		expect(body.address).toContain('123 Main');
+	} finally {
+		request.mockRestore();
+	}
+});
+it('rejects out-of-range selected coordinates', async () => {
+	mocks.body.mockResolvedValue({
+		address: '123 Main St, Indianapolis IN 46201',
+		coordinates: [-86, 999]
+	});
+	await expect(POST(event)).rejects.toMatchObject({ status: 400 });
+	expect(mocks.lookup).not.toHaveBeenCalled();
+});
