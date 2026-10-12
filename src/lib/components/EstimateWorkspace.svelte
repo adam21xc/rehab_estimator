@@ -4,6 +4,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import SmsWorkspace from './SmsWorkspace.svelte';
+	import QuickRemodel from './QuickRemodel.svelte';
 	import EmailSignIn from './EmailSignIn.svelte';
 	import PropertyImageLibrary from './PropertyImageLibrary.svelte';
 	import type { RehabProject } from '$lib/domain/types';
@@ -327,6 +328,8 @@
 		<p class="muted">
 			Turn a property photo into a remodel concept. Your originals stay untouched.
 		</p>
+		{#key user?.email}<QuickRemodel signedIn={!!user} enabled={renderingEnabled} />{/key}
+		<h3>From a saved estimate</h3>
 		{#if !photos.length}<div class="empty-state">
 				Start with a photo.<span>Add a photo to any repair item, then save your estimate.</span
 				><button class="secondary-button" onclick={() => changeView('estimate')}

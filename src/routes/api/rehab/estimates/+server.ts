@@ -9,6 +9,7 @@ export const GET: RequestHandler = async (event) => {
 		.from('rehab_estimates')
 		.select('id,project_id,address,total,created_at')
 		.eq('user_id', user.id)
+		.or('snapshot->meta->>kind.is.null,snapshot->meta->>kind.neq.studio')
 		.order('created_at', { ascending: false })
 		.range(page * 30, page * 30 + 29);
 	if (failure) error(503, 'Estimate history is unavailable. Please try again.');

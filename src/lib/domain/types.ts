@@ -42,6 +42,7 @@ export interface CategoryProgress {
 }
 
 export interface RehabProjectMeta {
+	kind?: 'studio';
 	id: string; // uuid/slug
 	address?: string;
 	createdAt: string; // ISO

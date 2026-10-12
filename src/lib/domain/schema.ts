@@ -45,6 +45,7 @@ export const categoryProgressZ = z.object({
 
 export const rehabProjectZ = z.object({
 	meta: z.object({
+		kind: z.literal('studio').optional(),
 		id: z.string(),
 		address: z.string().optional(),
 		createdAt: z.string().datetime(),

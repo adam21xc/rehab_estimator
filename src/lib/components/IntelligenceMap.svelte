@@ -407,21 +407,6 @@
 							? 'Location needs review'
 							: 'Not mapped yet'}
 				</p>
-				{@const view = streetView(selected.coordinates)}
-				{#if view}<div class="street-view">
-						{#if !imageFailed}<img
-								src={view.image}
-								alt={`Street-level view near ${selected.address}`}
-								onerror={() => (imageFailed = true)}
-							/>{:else}<p>Street View preview unavailable for this location.</p>{/if}
-						<a href={view.link} target="_blank" rel="noopener noreferrer"
-							>Open Google Street View ↗</a
-						>
-						<p>
-							Imagery via DealMachine. May show a nearby location or an older view; confirm the
-							address before relying on it.
-						</p>
-					</div>{:else}<p class="caution">Street View needs a saved property location.</p>{/if}
 				{#if colocated.length > 1}<div class="nearby">
 						<strong>Also at this point</strong
 						>{#each filtered.filter((p) => colocated.includes(p.key) && p.key !== selectedKey) as other (other.key)}<button
@@ -466,6 +451,21 @@
 								>{/if}
 						</article>{/each}
 				</div>
+				{@const view = streetView(selected.coordinates)}
+				{#if view}<div class="street-view">
+						{#if !imageFailed}<img
+								src={view.image}
+								alt={`Street-level view near ${selected.address}`}
+								onerror={() => (imageFailed = true)}
+							/>{:else}<p>Street View preview unavailable for this location.</p>{/if}
+						<a href={view.link} target="_blank" rel="noopener noreferrer"
+							>Open Google Street View ↗</a
+						>
+						<p>
+							Imagery via DealMachine. May show a nearby location or an older view; confirm the
+							address before relying on it.
+						</p>
+					</div>{:else}<p class="caution">Street View needs a saved property location.</p>{/if}
 				<p class="future">
 					Owner, ownership duration, and estimated mortgage details will appear here after
 					DealMachine enrichment.
