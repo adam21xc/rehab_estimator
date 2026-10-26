@@ -4,9 +4,19 @@ from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'scripts/accela'))
 from parser import Page,extract,application_tables,party,is_occupant
 from http_client import Form,postback
-from import_cases import page_links
+from import_cases import page_links,prioritized_queue
 
 class ImportTests(unittest.TestCase):
+    def test_missing_details_precede_refreshes_and_do_not_duplicate(self):
+        class DB:
+            def table(self,table,query):
+                self.query=query
+                return [{'case_number':'new'}]
+            def rpc(self,action,payload): return [{'case_number':'old'},{'case_number':'new'},{'case_number':'other'}]
+        db=DB()
+        self.assertEqual([r['case_number'] for r in prioritized_queue(db,2)],['new','old'])
+        self.assertEqual(db.query['detail_checked_at'],'is.null')
+        self.assertTrue(db.query['next_detail_at'].startswith('lte.'))
     def test_contacts_are_not_assumed_to_be_owners(self):
         self.assertTrue(is_occupant(['OCCUPANT','1 TEST ST']))
         self.assertFalse(is_occupant(['Example Person','1 TEST ST']))

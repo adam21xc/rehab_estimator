@@ -9,7 +9,9 @@ import time
 import uuid
 from datetime import datetime, timedelta, date
 from zoneinfo import ZoneInfo
+from concurrent.futures import ThreadPoolExecutor
 from urllib.request import Request, urlopen
+from urllib.parse import urlencode
 from http_client import AccelaHTTP, SEARCH_URL, postback
 from parser import Page, extract
 
@@ -24,6 +26,15 @@ class Database:
             'apikey':self.key,'Authorization':'Bearer '+self.key,'Content-Type':'application/json'})
         # Do not retry uncertain writes blindly. Next run reconciles idempotently.
         with urlopen(req,timeout=60) as r: return json.load(r)
+
+    def table(self, table, query, payload=None):
+        req=Request(self.url+'/rest/v1/'+table+'?'+urlencode(query),
+            data=json.dumps(payload).encode() if payload is not None else None,
+            method='PATCH' if payload is not None else 'GET', headers={
+                'apikey':self.key,'Authorization':'Bearer '+self.key,'Content-Type':'application/json'})
+        with urlopen(req,timeout=60) as r:
+            body=r.read()
+            return json.loads(body) if body else None
 
 
 def page_links(html):
@@ -81,6 +92,17 @@ def discover(client, start, end):
     return result
 
 
+def prioritized_queue(db, limit):
+    # Missing pages first; respect retry backoff, then use remaining capacity for refreshes.
+    missing=db.table('accela_cases',{'select':'case_number,source_url','agency':'eq.INDY',
+        'detail_checked_at':'is.null','next_detail_at':'lte.'+datetime.now().astimezone().isoformat(),
+        'order':'next_detail_at,case_number','limit':str(limit)})
+    if len(missing)>=limit: return missing
+    seen={r['case_number'] for r in missing}
+    refresh=db.rpc('queue',{'limit':limit})
+    return (missing+[r for r in refresh if r['case_number'] not in seen])[:limit]
+
+
 def run(args):
     db=Database();state=db.rpc('start')
     if not state['acquired']:
@@ -100,21 +122,42 @@ def run(args):
     client=AccelaHTTP(heartbeat)
     try:
         if end<start: raise ValueError('End date precedes start date')
-        records=discover(client,start,end)
+        records=[] if args.details_only else discover(client,start,end)
         for offset in range(0,len(records),100): db.rpc('discover',{'records':records[offset:offset+100]})
-        metrics['discovered']=len(records);complete=True
-        queue=db.rpc('queue',{'limit':args.max_details})
-        for item in queue:
-            heartbeat()
+        metrics['discovered']=len(records);complete=not args.details_only
+        if args.case_number or args.missing_only:
+            query={'select':'case_number,source_url','agency':'eq.INDY','order':'next_detail_at,case_number','limit':str(args.max_details)}
+            if args.case_number: query['case_number']='eq.'+args.case_number
+            else:
+                query['detail_checked_at']='is.null'
+                query['next_detail_at']='lte.'+datetime.now().astimezone().isoformat()
+            queue=db.table('accela_cases',query)
+        else: queue=prioritized_queue(db,args.max_details)
+        def fetch_detail(item):
             try:
-                detail=extract(client.get(item['source_url']),item['source_url'])
+                detail_client=client if args.workers==1 else AccelaHTTP(heartbeat)
+                detail=extract(detail_client.get(item['source_url']),item['source_url'])
                 if detail['case_number']!=item['case_number']: raise ValueError('Detail page case number mismatch')
+                return item,detail,None
             except Exception as exc:
-                # Keep the previous successful details intact and back off this record.
-                db.rpc('error',{'case_number':item['case_number'],'error':type(exc).__name__+': '+str(exc)[:200]})
-                metrics['detail_errors']+=1;continue
-            result=db.rpc('detail',{'detail':detail})
-            metrics['details_checked']+=1;metrics['details_changed']+=int(result['changed'])
+                return item,None,type(exc).__name__+': '+str(exc)[:200]
+        with ThreadPoolExecutor(max_workers=args.workers) as pool:
+            for offset in range(0,len(queue),args.workers):
+                heartbeat()
+                for item,detail,fetch_error in pool.map(fetch_detail,queue[offset:offset+args.workers]):
+                    if fetch_error:
+                        db.rpc('error',{'case_number':item['case_number'],'error':fetch_error})
+                        metrics['detail_errors']+=1
+                        continue
+                    result=db.rpc('detail',{'detail':detail})
+                    metrics['details_checked']+=1;metrics['details_changed']+=int(result['changed'])
+                    # Mark missing-detail work separately from owner research. Empty owner sections
+                    # are a review outcome, not a reason to refetch the same document indefinitely.
+                    task_id='accela:INDY:'+item['case_number']
+                    db.table('enrichment_tasks',{'id':'eq.'+task_id},{
+                        'status':'complete' if detail.get('owners') else 'review',
+                        'reason':'Source details saved' if detail.get('owners') else 'Source fetched; no owner in returned detail',
+                        'last_error':None,'updated_at':datetime.now().astimezone().isoformat()})
         status='partial' if metrics['detail_errors'] else 'success'
     except Exception as exc:
         error=type(exc).__name__+': '+str(exc)[:200]
@@ -127,6 +170,10 @@ def run(args):
 if __name__=='__main__':
     parser=argparse.ArgumentParser()
     parser.add_argument('--start');parser.add_argument('--end')
+    parser.add_argument('--details-only',action='store_true')
+    parser.add_argument('--missing-only',action='store_true')
+    parser.add_argument('--case-number')
+    parser.add_argument('--workers',type=int,choices=range(1,5),default=1)
     parser.add_argument('--max-details',type=int,default=150)
     parser.add_argument('--max-seconds',type=int,default=2700)
     run(parser.parse_args())
