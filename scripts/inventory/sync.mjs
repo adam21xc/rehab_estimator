@@ -22,20 +22,37 @@ export function planSync(accela,mycase,links){
  for(const r of sources.filter(r=>r.source==='mycase')) {const saved=existing.get(r.id);if(saved?.reviewed_at||saved?.property_id||saved?.status==='rejected'||saved?.address_role==='reviewed_subject_property')continue;tasks.push({id:r.id,source_link_id:r.id,kind:'case_documents',status:'queued',reason:'Establish subject property from complaint, mortgage or exhibits; never assume a party address is the property.'});}
  return {sources,additions,tasks};
 }
+export function canRefreshSource(saved, current) {
+ return saved && !saved.property_id && !saved.reviewed_at && ['ready','needs_match'].includes(saved.status)
+  && saved.address_role==='subject_property' && current.source==='accela'
+  && current.source_record.detail_checked_at && current.source_record.detail_checked_at!==saved.source_detail_checked_at;
+}
 export async function syncInventory(db){
  const [accela,mycase,links]=await Promise.all([
  all(db,'accela_cases','agency,case_number,address,case_type,record_status,filed_date,owners,parcel_information,detail_checked_at,source_url','case_number'),
  all(db,'indiana_cases','case_number,case_type_code,county_code,file_date,status,primary_plaintiff_name,primary_defendant_name,primary_defendant_address,parties,court,style','case_number'),
- all(db,'dm_source_links','id,status,property_id,address_role,reviewed_at','id')]);
+ all(db,'dm_source_links','id,status,property_id,address_role,reviewed_at,updated_at,source_detail_checked_at:source_record->>detail_checked_at','id')]);
  const {sources,additions,tasks}=planSync(accela,mycase,links);
  let added=0;
  for(let n=0;n<additions.length;n+=100)added+=check(await db.from('dm_source_links').upsert(additions.slice(n,n+100),{onConflict:'id',ignoreDuplicates:true}).select('id')).length;
+ // Refresh newly fetched source facts only on untouched, unenriched Accela links.
+ // Existing provider matches and human decisions are never reclassified here.
+ let refreshed=0;
+ const savedById=new Map(links.map(r=>[r.id,r]));
+ for(const current of sources){
+  const saved=savedById.get(current.id);if(!canRefreshSource(saved,current))continue;
+  const original=check(await db.from('dm_source_links').select('source_record').eq('id',current.id).single());
+  const record={...original.source_record,...current.source_record,initial_source_snapshot:original.source_record.initial_source_snapshot||original.source_record};
+  const updated=check(await db.from('dm_source_links').update({source_record:record,candidate_address:current.candidate_address,status:current.status,review_reasons:current.review_reasons,updated_at:new Date().toISOString()})
+    .eq('id',current.id).eq('updated_at',saved.updated_at).is('property_id',null).is('reviewed_at',null).select('id'));
+  refreshed+=updated.length;
+ }
  let tasksAdded=0;
  for(let n=0;n<tasks.length;n+=100)tasksAdded+=check(await db.from('enrichment_tasks').upsert(tasks.slice(n,n+100),{onConflict:'id',ignoreDuplicates:true}).select('id')).length;
  const finalLinks=await all(db,'dm_source_links','id','id');const ids=new Set(finalLinks.map(r=>r.id));
  const missing=sources.filter(r=>!ids.has(r.id)).length;
  if(missing)throw Error(`${missing} source records remain outside the queue`);
- return {accela:accela.length,mycase:mycase.length,total:sources.length,added,tasksAdded,missingFromQueue:missing,externalEnrichmentRequests:0};
+ return {accela:accela.length,mycase:mycase.length,total:sources.length,added,refreshed,tasksAdded,missingFromQueue:missing,externalEnrichmentRequests:0};
 }
 if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
  const url=process.env.PUBLIC_SUPABASE_URL||process.env.SUPABASE_URL,key=process.env.SUPABASE_SERVICE_ROLE_KEY;
