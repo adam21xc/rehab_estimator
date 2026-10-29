@@ -92,6 +92,11 @@ def discover(client, start, end):
     return result
 
 
+def detail_errors_fatal(errors,checked,rate,minimum):
+    # Both gates: enough errors, and a larger share than `rate` of the successful checks.
+    return errors>=minimum and errors>rate*checked
+
+
 def prioritized_queue(db, limit):
     # Missing pages first; respect retry backoff, then use remaining capacity for refreshes.
     missing=db.table('accela_cases',{'select':'case_number,source_url','agency':'eq.INDY',
@@ -165,9 +170,17 @@ def run(args):
         result=db.rpc('finish',{'status':status,'window_start':start.isoformat(),'window_end':end.isoformat(),
             'metrics':metrics,'discovery_complete':complete,'error':error})
         print(json.dumps({'run_id':db.run_id,'status':status,**metrics,**result,'error':error}))
-    if status!='success': raise SystemExit(1)
+    # Detail misses stay partial and retry later. Fail the process only for a real run
+    # error, or when misses are numerous enough to exceed the share of pages checked.
+    rate=getattr(args,'detail_error_rate',0.10)
+    minimum=getattr(args,'detail_error_minimum',3)
+    fatal=status=='partial' and detail_errors_fatal(metrics['detail_errors'],metrics['details_checked'],rate,minimum)
+    if status=='partial' and not fatal:
+        print('::warning::Accela import partial: %d detail error(s) out of %d details checked (threshold %g%%, minimum %d)'%(
+            metrics['detail_errors'],metrics['details_checked'],rate*100,minimum))
+    if status=='failed' or fatal: raise SystemExit(1)
 
-if __name__=='__main__':
+def build_parser():
     parser=argparse.ArgumentParser()
     parser.add_argument('--start');parser.add_argument('--end')
     parser.add_argument('--details-only',action='store_true')
@@ -176,4 +189,9 @@ if __name__=='__main__':
     parser.add_argument('--workers',type=int,choices=range(1,5),default=1)
     parser.add_argument('--max-details',type=int,default=150)
     parser.add_argument('--max-seconds',type=int,default=2700)
-    run(parser.parse_args())
+    parser.add_argument('--detail-error-rate',type=float,default=float(os.environ.get('ACCELA_DETAIL_ERROR_RATE','0.10')))
+    parser.add_argument('--detail-error-minimum',type=int,default=int(os.environ.get('ACCELA_DETAIL_ERROR_MINIMUM','3')))
+    return parser
+
+if __name__=='__main__':
+    run(build_parser().parse_args())
