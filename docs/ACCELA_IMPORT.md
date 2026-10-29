@@ -48,7 +48,18 @@ Up to 150 due detail pages run per hour by default. New/changed source summaries
 are queued immediately; successful open-case details refresh daily and closed/void
 cases weekly. Pending work remains in the database. Request failures back off
 1, 2, 4, 8, 16, then 24 hours; previously fetched details are preserved. One failed
-case does not stop other cases. A partial run exits nonzero for visibility.
+case does not stop other cases. Detail errors are stored and the run status stays
+`partial`, so those cases retry on their backoff. The process still exits 0 when
+the errors are under the failure threshold, and it prints a GitHub Actions
+`::warning::` annotation with the count. By default that threshold is more than
+10% of `details_checked` (successful detail pages) and at least 3 errors: one or
+two detail errors never fail the job on their own, and three or more fail it only
+when they exceed 10% of the pages checked. Zero successful checks with at least 3
+detail errors is over the threshold. Discovery, database, and other run-level
+errors still exit nonzero. Override the limits with `--detail-error-rate` (a
+fraction, default `0.10`) and `--detail-error-minimum` (default `3`), or with
+`ACCELA_DETAIL_ERROR_RATE` and `ACCELA_DETAIL_ERROR_MINIMUM`. The hourly workflow
+uses these defaults.
 
 Requests are sequential with at least one second spacing and limited transient
 retries. Lease renewal prevents concurrent workers; a terminated worker becomes
