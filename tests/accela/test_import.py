@@ -33,6 +33,9 @@ class ImportTests(unittest.TestCase):
     def test_real_ids_and_next_page(self):
         links,target,_=page_links('<a href="/INDY/Cap/CapDetail.aspx?capID1=26VIO&amp;capID3=99999">VIO26-000001</a><a href="javascript:__doPostBack(\'next-control\',\'\')">Next &gt;</a>')
         self.assertIn('capID3=99999',links['VIO26-000001']);self.assertEqual(target,'next-control')
+    def test_login_page_is_an_access_issue_not_valid_record_data(self):
+        with self.assertRaisesRegex(PermissionError,'requires login'):
+            extract('<h1>Please Login</h1><p>Registered users, please enter your user name and password.</p>','https://example.invalid')
     def test_error_page_rejected(self):
         with self.assertRaises(ValueError):extract('<h1>Server error</h1>','https://example.invalid')
     def test_multiple_occupants_and_violators(self):

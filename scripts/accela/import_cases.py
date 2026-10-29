@@ -148,6 +148,10 @@ def run(args):
                     if fetch_error:
                         db.rpc('error',{'case_number':item['case_number'],'error':fetch_error})
                         metrics['detail_errors']+=1
+                        if fetch_error.startswith('PermissionError:'):
+                            db.table('enrichment_tasks',{'id':'eq.accela:INDY:'+item['case_number']},{
+                                'status':'blocked','reason':'Accela returned a login page; authenticated access needed to inspect this record',
+                                'last_error':fetch_error,'updated_at':datetime.now().astimezone().isoformat()})
                         continue
                     result=db.rpc('detail',{'detail':detail})
                     metrics['details_checked']+=1;metrics['details_changed']+=int(result['changed'])

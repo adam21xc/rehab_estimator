@@ -90,6 +90,8 @@ def party(lines, role):
 
 def extract(html, url):
     page = Page(); page.feed(html)
+    if 'Please Login' in page.lines and 'Case Number' not in page.lines:
+        raise PermissionError('Accela requires login for this record; public detail page unavailable')
     if 'Case Number' not in page.lines or 'Record Status:' not in page.lines or 'More Details' not in page.lines:
         raise ValueError('Expected case detail page; refusing to treat an error page as data')
     lines = page.lines
