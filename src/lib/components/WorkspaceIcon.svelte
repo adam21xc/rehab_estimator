@@ -10,7 +10,8 @@
 		'Property images': 'M3 4h18v16H3zM3 16l6-6 5 5 3-3 4 4M16 8h.01',
 		'Design studio': 'm12 3 9 9-9 9-9-9 9-9ZM12 7v10M7 12h10',
 		'SMS outreach': 'M4 4h16v12H9l-5 4V4ZM8 8h8M8 12h5',
-		'Email outreach': 'M3 5h18v14H3zM3 6l9 7 9-7'
+		'Email outreach': 'M3 5h18v14H3zM3 6l9 7 9-7',
+		'Bot team office': 'M4 20V9l8-5 8 5v11M9 20v-6h6v6M8 11h.01M12 11h.01M16 11h.01'
 	};
 </script>
 

@@ -11,7 +11,13 @@
 		{
 			title: 'Discover',
 			items: [
-				{ label: 'Lead enrichment', path: '/enrichment', query: '', href: resolve('/enrichment'), color: '#35b9a1' },
+				{
+					label: 'Lead enrichment',
+					path: '/enrichment',
+					query: '',
+					href: resolve('/enrichment'),
+					color: '#35b9a1'
+				},
 				{
 					label: 'Sales intelligence',
 					path: '/sales',
@@ -38,7 +44,13 @@
 		{
 			title: 'Plan & renovate',
 			items: [
-				{ label: 'Postcard image review', path: '/renovation-review', query: '', href: resolve('/renovation-review'), color: '#42c9b4' },
+				{
+					label: 'Postcard image review',
+					path: '/renovation-review',
+					query: '',
+					href: resolve('/renovation-review'),
+					color: '#42c9b4'
+				},
 				{
 					label: 'Rehab calculator',
 					path: '/rehab',
@@ -80,6 +92,18 @@
 					color: '#42c9b4'
 				},
 				{ label: 'Email outreach', path: '/', query: '', href: resolve('/'), color: '#ed97b5' }
+			]
+		},
+		{
+			title: 'Team',
+			items: [
+				{
+					label: 'Bot team office',
+					path: '/office',
+					query: '',
+					href: resolve('/office'),
+					color: '#45d3bb'
+				}
 			]
 		}
 	];
