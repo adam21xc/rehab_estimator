@@ -1,6 +1,6 @@
 # Rehab estimator and outreach
 
-A Svelte 5 / SvelteKit application with four screens:
+A Svelte 5 / SvelteKit application with five screens:
 
 - `/rehab`: property rehab calculator with 39 categories and 180 priced items.
 - `/`: outreach administration for Gmail and Supabase.
@@ -8,6 +8,7 @@ A Svelte 5 / SvelteKit application with four screens:
 - `/sales`: authenticated Marion County sales intelligence, participant rankings,
   matched resales, holding periods, inventory candidates, and same-day transfer candidates.
   Click an address for a property profile with recorded history, Google Maps, and a Zillow address lookup.
+- `/office`: live top-down office for the bot team. See [docs/bot-status.md](docs/bot-status.md).
 
 ## Local development
 
@@ -25,7 +26,8 @@ npm run dev
 Outreach requires a local, Git-ignored `.env` with `PUBLIC_SUPABASE_URL`,
 `SUPABASE_SERVICE_ROLE_KEY`, `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`,
 `GMAIL_REDIRECT_URI`, `GMAIL_REFRESH_TOKEN`, `FROM_EMAIL`, `SENDING_NAME`, and
-`PUBLIC_BASE_DOMAIN`. Never put the service-role key or OAuth secrets in public
+`PUBLIC_BASE_DOMAIN`. The bot office also reads `PUBLIC_SUPABASE_ANON_KEY`
+(anon or publishable key) in the browser. Never put the service-role key or OAuth secrets in public
 variables. Optional settings include `BATCH_SIZE`, `SEND_DELAY_MS`,
 `DAYS_BETWEEN_FOLLOWUPS` and `MAX_FOLLOWUPS`.
 `SEND_DUE_SECRET` is required by both `/api/send-due` (including previews) and
@@ -371,7 +373,6 @@ The daily discovery runner now checks saved case numbers before requesting detai
 This is the latest stored snapshot, not an audit history of every prior scrape.
 The daily current/previous-month scope does not refresh older active cases; a separate
 older-case reconciliation job is still needed for that coverage.
-
 
 ### Property intelligence map
 
