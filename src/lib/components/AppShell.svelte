@@ -38,6 +38,7 @@
 		{
 			title: 'Plan & renovate',
 			items: [
+				{ label: 'Postcard image review', path: '/renovation-review', query: '', href: resolve('/renovation-review'), color: '#42c9b4' },
 				{
 					label: 'Rehab calculator',
 					path: '/rehab',

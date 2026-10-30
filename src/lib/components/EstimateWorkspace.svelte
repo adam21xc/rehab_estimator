@@ -30,6 +30,7 @@
 		created_at: string;
 	};
 	type Rendering = {
+		phase?: string;
 		id: string;
 		status: string;
 		prompt: string;
@@ -84,6 +85,11 @@
 	}
 	onMount(() => {
 		void session();
+		const timer = setInterval(() => {
+			if (user && !generating && renderings.some((r) => r.status === 'processing'))
+				void refreshRenderings();
+		}, 10000);
+		return () => clearInterval(timer);
 	});
 	async function logout() {
 		busy = true;
@@ -217,16 +223,19 @@
 		if (!savedId || !photoId) return;
 		generating = true;
 		failure = '';
-		message = 'Rendering your concept. This may take a few minutes.';
+		message = 'Queuing your concept for the OAuth worker…';
 		try {
-			await api('renderings', 'POST', {
+			const result = await api('renderings', 'POST', {
 				requestId: crypto.randomUUID(),
 				estimateId: savedId,
 				photoId,
 				prompt,
 				style
 			});
-			message = 'Your remodel concept is ready.';
+			message =
+				result.status === 'completed'
+					? 'Your saved remodel concept is ready.'
+					: 'Queued for OAuth generation on your Mac. The result will appear in Concept history.';
 		} catch (e) {
 			failure = (e as Error).message;
 			message = '';
@@ -356,13 +365,13 @@
 					></textarea></label
 				>
 				<p class="muted small">
-					Generate sends the selected photo and instructions to OpenAI. One concept per request; API
-					charges apply. Concept imagery does not change your estimate or establish structural
-					feasibility.
+					Queue a concept through your OpenClaw OAuth connection. Your Mac must be online to process
+					it. No paid API fallback. Concept imagery does not change your estimate or establish
+					structural feasibility.
 				</p>
 				{#if dirty}<p class="notice">Save this version before requesting a rendering.</p>{/if}
 				{#if !renderingEnabled}<p class="notice">
-						Rendering is awaiting the workspace’s OpenAI API connection.
+						OAuth image requests are currently unavailable.
 					</p>{/if}
 				<button
 					class="primary-button"
@@ -371,10 +380,11 @@
 						!photoId ||
 						prompt.trim().length < 10 ||
 						generating ||
+						renderings.some((r) => r.status === 'processing') ||
 						!renderingEnabled ||
 						busy}
 					onclick={generate}
-					>{generating ? 'Creating your concept…' : 'Generate remodel concept'}
+					>{generating ? 'Creating your concept…' : 'Queue remodel through OAuth'}
 					<span aria-hidden="true">↗</span></button
 				>
 			</div>{/if}
@@ -389,7 +399,7 @@
 							alt={`AI remodel concept: ${rendering.prompt}`}
 						/>{/if}
 					<div>
-						<span class="eyebrow">{rendering.status} · {rendering.style}</span>
+						<span class="eyebrow">{rendering.phase || rendering.status} · {rendering.style}</span>
 						<p>{rendering.prompt}</p>
 						{#if rendering.error_message}<p class="notice error">
 								{rendering.error_message}

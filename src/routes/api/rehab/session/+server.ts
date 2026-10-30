@@ -1,7 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import { authFailure } from '$lib/server/auth-errors';
 import { z } from 'zod';
-import { env } from '$env/dynamic/private';
 import {
 	authClient,
 	allowedEmail,
@@ -14,11 +13,11 @@ import type { RequestHandler } from './$types';
 export const GET: RequestHandler = async (event) => {
 	if (!event.cookies.get('rehab_access') && !event.cookies.get('rehab_refresh'))
 		return json(
-			{ user: null, renderingEnabled: !!env.OPENAI_API_KEY },
+			{ user: null, renderingEnabled: true },
 			{ headers: { 'cache-control': 'no-store' } }
 		);
 	const { user } = await requireUser(event);
-	return json({ user: { email: user.email }, renderingEnabled: !!env.OPENAI_API_KEY });
+	return json({ user: { email: user.email }, renderingEnabled: true });
 };
 export const POST: RequestHandler = async (event) => {
 	sameOrigin(event);

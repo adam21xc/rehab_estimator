@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { RENOVATION_STYLE, RENOVATION_REQUEST } from '$lib/renovation-standard.js';
 	import { onMount } from 'svelte';
 	import AddressAutocomplete from './AddressAutocomplete.svelte';
 	import { studioProject } from '$lib/domain/studio';
@@ -13,10 +14,8 @@
 	let warning = $state('');
 	let streetLink = $state('');
 	let confirmed = $state(false);
-	let style = $state('Modern warm');
-	let prompt = $state(
-		'Give this property a fresh, inviting remodel with cohesive colors, attractive finishes, and practical upgrades. Preserve the viewpoint and existing structure.'
-	);
+	let style = $state(RENOVATION_STYLE);
+	let prompt = $state(RENOVATION_REQUEST);
 	let busy = $state(false);
 	let problem = $state('');
 	let message = $state('');
@@ -27,6 +26,7 @@
 	type Concept = {
 		id: string;
 		status: string;
+		phase?: string;
 		prompt: string;
 		url: string | null;
 		error_message?: string;
@@ -53,9 +53,17 @@
 	}
 	onMount(() => {
 		if (signedIn) void history();
+		const timer = setInterval(() => {
+			if (signedIn && !busy && (requestId || concepts.some((c) => c.status === 'processing')))
+				void checkStatus();
+		}, 10000);
+		return () => clearInterval(timer);
 	});
 	async function refresh() {
-		if (savedId) concepts = (await api(`renderings?estimateId=${savedId}`)).renderings;
+		if (savedId) {
+			concepts = (await api(`renderings?estimateId=${savedId}`)).renderings;
+			if (!requestId) requestId = concepts.find((c) => c.status === 'processing')?.id || '';
+		}
 	}
 	function resetPhoto(next: PhotoRef) {
 		photo = next;
@@ -135,7 +143,7 @@
 		if (!photo || busy || !confirmed) return;
 		busy = true;
 		problem = '';
-		message = 'Saving your photo and creating a concept…';
+		message = 'Saving your photo and queuing an OAuth concept…';
 		try {
 			if (!photo.storagePath) {
 				const uploaded = await api('photos', { dataUrl: photo.url });
@@ -160,7 +168,9 @@
 				result.status === 'completed'
 					? 'Your remodel concept is ready.'
 					: result.status === 'processing'
-						? 'Still processing. Use Refresh status to check without creating another request.'
+						? result.phase === 'queued'
+							? 'Queued for the OAuth worker on your Mac. This page checks for the result automatically.'
+							: 'Generating through OAuth. This page checks for the result automatically.'
 						: 'This request failed. Review its status before starting another concept.';
 			if (result.status === 'completed') requestId = '';
 		} catch (e) {
@@ -192,7 +202,15 @@
 		try {
 			await refresh();
 			const previous = concepts.find((c) => c.id === requestId);
-			if (!previous || previous.status === 'completed') requestId = '';
+			if (previous?.status === 'completed') {
+				requestId = '';
+				message = 'Your OAuth remodel concept is ready.';
+			} else if (previous?.status === 'processing')
+				message =
+					previous.error_message ||
+					(previous.phase === 'queued'
+						? 'Queued for the OAuth worker on your Mac.'
+						: 'Generating through OAuth…');
 		} catch (e) {
 			problem = (e as Error).message;
 		}
@@ -314,12 +332,10 @@
 				></textarea></label
 			>
 			<p class="fine">
-				Generate sends this photo and your instructions to OpenAI. API charges apply. Your original
-				and concept are saved in Property images.
+				Requests are saved to the OAuth queue. OpenClaw on your Mac generates the concept and saves
+				it here. If the Mac is offline, your request waits. No paid API fallback.
 			</p>
-			{#if !enabled}<p class="notice">
-					Image generation needs the workspace’s OpenAI connection.
-				</p>{/if}
+			{#if !enabled}<p class="notice">OAuth image requests are currently unavailable.</p>{/if}
 			<button
 				class="generate"
 				disabled={!signedIn ||
@@ -330,7 +346,7 @@
 					prompt.trim().length < 10 ||
 					!!requestId}
 				onclick={generate}
-				>{busy ? 'Working on your concept…' : 'Generate remodel concept ↗'}</button
+				>{busy ? 'Working on your concept…' : 'Queue remodel through OAuth ↗'}</button
 			>
 			{#if requestId}<p class="fine">
 					This request is saved. Refresh its status before creating another.
@@ -341,7 +357,7 @@
 						onclick={() => {
 							requestId = '';
 							message =
-								'You can now request a new concept. A new request may incur another charge.';
+								'You can now queue a new OAuth concept. It uses your account’s generation allowance.';
 						}}>Start a new request</button
 					>{/if}{/if}
 		</div>
@@ -359,7 +375,7 @@
 	<div class="concepts">
 		{#each concepts as concept (concept.id)}<article>
 				{#if concept.url}<img src={concept.url} alt={`Remodel concept: ${concept.prompt}`} />{/if}
-				<p><strong>{concept.status}</strong> · {concept.prompt}</p>
+				<p><strong>{concept.phase || concept.status}</strong> · {concept.prompt}</p>
 				{#if concept.error_message}<p class="notice error">
 						{concept.error_message}
 					</p>{/if}{#if concept.url}<a href={concept.url} target="_blank" rel="noopener noreferrer"
