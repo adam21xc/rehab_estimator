@@ -20,6 +20,8 @@ const ROSTER = [
 	'seller-followup',
 	'deal-analyzer',
 	'research-assistant',
+	'rendering-reviewer',
+	'marketing-designer',
 	'dispo',
 	'closing'
 ];
@@ -160,7 +162,25 @@ export function officeSummary(rows: BotRow[]): string {
 	const vacant = open.length
 		? `${open.join(' and ')} ${open.length === 1 ? 'is' : 'are'} not hired yet.`
 		: '';
-	return ['Top-down office.', who.join('. '), vacant].filter(Boolean).join(' ');
+	return ['Office.', who.join('. '), vacant].filter(Boolean).join(' ');
+}
+
+/** Prefer the newer row when a poll and a realtime event overlap. */
+export function reconcileBots(local: BotRow[], incoming: BotRow[], startedAt: number): BotRow[] {
+	const incomingById = new Map(incoming.map((row) => [row.bot_id, row]));
+	const ids = new Set([...local.map((row) => row.bot_id), ...incoming.map((row) => row.bot_id)]);
+	const next: BotRow[] = [];
+	for (const id of ids) {
+		const current = local.find((row) => row.bot_id === id);
+		const fetched = incomingById.get(id);
+		if (current && fetched) {
+			next.push(
+				Date.parse(current.updated_at) > Date.parse(fetched.updated_at) ? current : fetched
+			);
+		} else if (fetched) next.push(fetched);
+		else if (current && Date.parse(current.updated_at) > startedAt) next.push(current);
+	}
+	return next;
 }
 
 export function explainOfficeError(message: string): string {
