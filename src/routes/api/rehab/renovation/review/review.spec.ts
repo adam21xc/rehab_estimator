@@ -86,3 +86,46 @@ it('saves notes without replacing other enrichment data and detects concurrent w
 		reviewed_by: 'reviewer'
 	});
 });
+
+it('archives even held images without deleting assets or other property facts', async () => {
+	const f = { ...facts, renovation_batch: { status: 'needs_review', reason: 'No better source' } };
+	const chain = setup(f);
+	m.body.mockResolvedValue({
+		id,
+		version: reviewPair(id, f)!.version,
+		status: 'archived',
+		note: ''
+	});
+	expect((await PATCH(event)).status).toBe(200);
+	const updated = chain.update.mock.calls[0][0].facts;
+	expect(updated.renovation_image_review.status).toBe('archived');
+	expect(updated.renovation_image_pair).toEqual(facts.renovation_image_pair);
+	expect(updated.unrelated).toEqual(facts.unrelated);
+});
+it('excludes archived pairs from all active images and exposes a separate archive filter', async () => {
+	const archived = {
+		...facts,
+		renovation_image_review: { version: reviewPair(id, facts)!.version, status: 'archived' }
+	};
+	const chain: any = {};
+	for (const method of ['select', 'or', 'order']) chain[method] = () => chain;
+	chain.range = async () => ({
+		data: [
+			{ id, facts: archived },
+			{ id, facts }
+		],
+		error: null
+	});
+	const signed = vi.fn(async () => ({ data: [{ signedUrl: 'before' }, { signedUrl: 'after' }] }));
+	m.db.mockReturnValue({
+		from: () => chain,
+		storage: { from: () => ({ createSignedUrls: signed }) }
+	});
+	const active = await (await GET({ url: new URL('http://localhost/?status=all') } as any)).json();
+	expect(active.counts).toMatchObject({ all: 1, pending: 1, archived: 1 });
+	expect(active.items.map((r: any) => r.status)).toEqual(['pending']);
+	const archive = await (
+		await GET({ url: new URL('http://localhost/?status=archived') } as any)
+	).json();
+	expect(archive.items.map((r: any) => r.status)).toEqual(['archived']);
+});

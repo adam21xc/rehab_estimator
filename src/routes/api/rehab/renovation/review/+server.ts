@@ -23,12 +23,17 @@ export const GET: RequestHandler = async (event) => {
 		}
 		if ((r.data?.length || 0) < 500) break;
 	}
-	const counts = { all: rows.length, pending: 0, approved: 0, flagged: 0 };
-	for (const row of rows) counts[row.status as 'pending' | 'approved' | 'flagged']++;
+	const counts = { all: 0, pending: 0, approved: 0, flagged: 0, archived: 0 };
+	for (const row of rows) {
+		counts[row.status as 'pending' | 'approved' | 'flagged' | 'archived']++;
+		if (row.status !== 'archived') counts.all++;
+	}
 	const q = (event.url.searchParams.get('q') || '').toLowerCase(),
 		status = event.url.searchParams.get('status') || 'all';
 	const filtered = rows.filter(
-		(r) => (status === 'all' || r.status === status) && r.address.toLowerCase().includes(q)
+		(r) =>
+			(status === 'all' ? r.status !== 'archived' : r.status === status) &&
+			r.address.toLowerCase().includes(q)
 	);
 	const pages = Math.max(1, Math.ceil(filtered.length / 12));
 	const page = Math.min(pages, Math.max(1, Number(event.url.searchParams.get('page')) || 1));
@@ -57,7 +62,7 @@ export const PATCH: RequestHandler = async (event) => {
 		.object({
 			id: z.string().regex(/^prop_\d+$/),
 			version: z.string().regex(/^[a-f0-9]{64}$/),
-			status: z.enum(['pending', 'approved', 'flagged']),
+			status: z.enum(['pending', 'approved', 'flagged', 'archived']),
 			note: z.string().trim().max(2000)
 		})
 		.safeParse(await readJson(event, 8000));

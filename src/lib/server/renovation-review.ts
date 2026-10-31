@@ -18,7 +18,8 @@ export function reviewPair(id: string, facts: Record<string, any>) {
 		.update(JSON.stringify([before, after]))
 		.digest('hex');
 	const review = facts.renovation_image_review;
-	const current = review?.version === version ? review : null;
+	// Archiving is a deliberate queue decision; replacing images must not silently restore it.
+	const current = review?.status === 'archived' || review?.version === version ? review : null;
 	const hold =
 		facts.renovation_batch?.status === 'needs_review' ? facts.renovation_batch.reason : null;
 	return {

@@ -15,7 +15,7 @@
 		loadedAfter?: boolean;
 	};
 	let rows = $state<Row[]>([]),
-		counts = $state({ all: 0, pending: 0, approved: 0, flagged: 0 }),
+		counts = $state({ all: 0, pending: 0, approved: 0, flagged: 0, archived: 0 }),
 		page = $state(1),
 		pages = $state(1),
 		q = $state(''),
@@ -65,7 +65,7 @@
 			});
 			const data = await r.json();
 			if (!r.ok) throw Error(data.message || 'Review was not saved.');
-			notice = `${row.address}: ${value === 'approved' ? 'image pair approved' : value === 'flagged' ? 'flagged for review' : 'returned to pending'}.`;
+			notice = `${row.address}: ${value === 'approved' ? 'image pair approved' : value === 'flagged' ? 'flagged for review' : value === 'archived' ? 'archived and removed from the active queue' : 'returned to pending'}.`;
 			await load();
 		} catch (e) {
 			problem = e instanceof Error ? e.message : 'Review was not saved.';
@@ -90,9 +90,10 @@
 	</header>
 	{#if !signedIn}<EmailSignIn onSignedIn={() => load()} />{:else}
 		<div class="stats">
-			<span><b>{counts.all}</b> image pairs</span><span
+			<span><b>{counts.all}</b> active image pairs</span><span
 				><b>{counts.pending}</b> awaiting review</span
-			><span><b>{counts.approved}</b> approved</span><span><b>{counts.flagged}</b> flagged</span>
+			><span><b>{counts.approved}</b> approved</span><span><b>{counts.flagged}</b> flagged</span
+			><span><b>{counts.archived}</b> archived</span>
 		</div>
 		<form
 			onsubmit={(e) => {
@@ -102,8 +103,10 @@
 		>
 			<label>Property address<input bind:value={q} placeholder="Search an address" /></label><label
 				>Review status<select bind:value={status} onchange={() => load(1)}
-					><option value="all">All images</option><option value="pending">Awaiting review</option
-					><option value="approved">Approved</option><option value="flagged">Flagged</option
+					><option value="all">All active images</option><option value="pending"
+						>Awaiting review</option
+					><option value="approved">Approved</option><option value="flagged">Flagged</option><option
+						value="archived">Archived</option
 					></select
 				></label
 			><button disabled={busy || !!saving}>Search / refresh</button>
@@ -116,7 +119,8 @@
 			</p>{/if}
 		<p class="hint">
 			New image pairs appear as the batch finishes. Refresh to load them. Click either photo to view
-			it full size.
+			it full size. Archive unusable pairs to remove them from this queue without deleting the
+			property or images. Restore them from the Archived filter.
 		</p>
 		{#if busy}<p role="status">Loading image pairs…</p>{/if}
 		{#each rows as row (row.id)}
@@ -167,6 +171,7 @@
 						class="approve"
 						disabled={busy ||
 							!!saving ||
+							row.status === 'archived' ||
 							!!row.hold ||
 							row.imageError ||
 							!row.loadedBefore ||
@@ -174,18 +179,24 @@
 						onclick={() => save(row, 'approved')}>Approve images</button
 					><button
 						class="flag"
-						disabled={busy || !!saving || !row.note.trim()}
+						disabled={busy || !!saving || row.status === 'archived' || !row.note.trim()}
 						onclick={() => save(row, 'flagged')}>Flag for review</button
 					><button disabled={busy || !!saving} onclick={() => save(row, row.status)}
 						>Save note</button
-					>{#if row.status !== 'pending'}<button
+					>{#if row.status !== 'archived'}<button
+							class="archive"
 							disabled={busy || !!saving}
-							onclick={() => save(row, 'pending')}>Return to pending</button
+							onclick={() => save(row, 'archived')}>Archive images</button
+						>{/if}{#if row.status !== 'pending'}<button
+							disabled={busy || !!saving}
+							onclick={() => save(row, 'pending')}
+							>{row.status === 'archived' ? 'Restore to review' : 'Return to pending'}</button
 						>{/if}{#if saving === row.id}<span role="status">Saving…</span>{/if}
 				</div>
 			</article>
 		{:else}{#if !busy}<p class="empty">
-					No image pairs match this filter. Try “All images” or refresh as generation progresses.
+					No image pairs match this filter. Try “All active images” or refresh as generation
+					progresses.
 				</p>{/if}{/each}
 		<nav aria-label="Review pages">
 			<button disabled={page <= 1 || busy || !!saving} onclick={() => load(page - 1)}

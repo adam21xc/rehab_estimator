@@ -56,3 +56,26 @@ describe('property image reviews', () => {
 		expect(pair?.hold).toBe('Wrong house number');
 	});
 });
+
+it('keeps an archive out of the queue after replacement until explicitly restored', () => {
+	const version = reviewPair(id, facts)!.version;
+	const archived = {
+		...facts,
+		renovation_image_review: { version, status: 'archived', note: 'No usable photo' }
+	};
+	const replacement = {
+		...archived,
+		renovation_image_pair: {
+			...facts.renovation_image_pair,
+			renovated_path: 'renovation/prop_12/new.jpg'
+		}
+	};
+	expect(reviewPair(id, replacement)?.status).toBe('archived');
+	expect(reviewPair(id, replacement)?.note).toBe('No usable photo');
+	expect(
+		reviewPair(id, {
+			...replacement,
+			renovation_image_review: { version: reviewPair(id, replacement)!.version, status: 'pending' }
+		})?.status
+	).toBe('pending');
+});
