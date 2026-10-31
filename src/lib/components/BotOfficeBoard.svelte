@@ -12,7 +12,7 @@
 	}: {
 		bots: BotRow[];
 		phase: 'loading' | 'ready' | 'unconfigured';
-		link: 'connecting' | 'live' | 'offline';
+		link: 'connecting' | 'live' | 'reconnecting';
 		problem?: string;
 		now?: number;
 	} = $props();
@@ -23,13 +23,7 @@
 	const rows = $derived(sortBots(bots));
 	const stamp = $derived(now ?? (mounted ? clock : null));
 	const badge = $derived(
-		phase === 'unconfigured'
-			? 'Setup needed'
-			: link === 'live'
-				? 'Live'
-				: link === 'offline'
-					? 'Offline'
-					: 'Connecting'
+		phase === 'unconfigured' ? 'Setup needed' : link === 'live' ? 'Live' : 'Reconnecting'
 	);
 
 	onMount(() => {
@@ -57,7 +51,11 @@
 				lounge. Blocked and waiting bots stay put until you clear them.
 			</p>
 		</div>
-		<p class="badge" data-state={phase === 'unconfigured' ? 'setup' : link} role="status">
+		<p
+			class="badge"
+			data-state={phase === 'unconfigured' ? 'setup' : link === 'live' ? 'live' : 'reconnecting'}
+			role="status"
+		>
 			<span class="dot" aria-hidden="true"></span>{badge}
 		</p>
 	</header>
@@ -68,8 +66,10 @@
 		</p>
 	{:else if problem}
 		<p class="office-notice problem" role="status">{problem}</p>
-	{:else if phase === 'ready' && link === 'offline'}
-		<p class="office-notice">Live updates are paused. This is the last roster that loaded.</p>
+	{:else if phase === 'ready' && link === 'reconnecting'}
+		<p class="office-notice">
+			Reconnecting. The roster refreshes every 30 seconds until live updates return.
+		</p>
 	{/if}
 	<div class="floor-card">
 		<div class="floor-wide"><BotOfficeFloor {bots} mode="wide" {phase} /></div>
@@ -130,7 +130,9 @@
 								</td>
 								<td data-label="Updated">
 									{#if stamp != null}
-										<time datetime={bot.updated_at}>{relativeTime(bot.updated_at, stamp)}</time>
+										<time datetime={bot.updated_at}
+											>updated {relativeTime(bot.updated_at, stamp)}</time
+										>
 									{:else}
 										…
 									{/if}
@@ -154,6 +156,9 @@
 		--wall: #2c354c;
 		--desk: #d7b07a;
 		--desk-top: #8d6233;
+		--slab: #8a5a32;
+		--plank: #ddc39a;
+		--neon: #1493c7;
 		--monitor: #243044;
 		--screen: #c5e4ff;
 		--chair: #66738c;
@@ -225,7 +230,9 @@
 		box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 55%, transparent);
 		animation: pulse 1.8s ease-out infinite;
 	}
-	.badge[data-state='offline'] .dot,
+	.badge[data-state='reconnecting'] .dot {
+		background: var(--warn);
+	}
 	.badge[data-state='setup'] .dot {
 		background: var(--blocked);
 	}
@@ -248,9 +255,19 @@
 	.panel {
 		background: var(--card);
 		border: 1px solid var(--line);
-		border-radius: 16px;
+		border-radius: 18px;
 		padding: 12px;
 		margin-bottom: 18px;
+		box-shadow: 0 16px 40px #1b140c14;
+	}
+	.floor-card {
+		background:
+			radial-gradient(
+				ellipse at 20% 0%,
+				color-mix(in srgb, var(--neon) 16%, transparent),
+				transparent 42%
+			),
+			radial-gradient(ellipse at 80% 100%, #e7b56a22, transparent 46%), var(--card);
 	}
 	.floor-narrow {
 		display: none;
@@ -393,6 +410,9 @@
 			--wall: #c5cbe0;
 			--desk: #8a6240;
 			--desk-top: #e2c091;
+			--slab: #4a3018;
+			--plank: #2a3348;
+			--neon: #7ee7ff;
 			--monitor: #101722;
 			--screen: #7ec8ff;
 			--chair: #8b97b0;

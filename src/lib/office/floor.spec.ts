@@ -67,10 +67,64 @@ const seeded: BotRow[] = [
 ];
 
 function pose(bots: BotRow[], id: string, mode: 'wide' | 'narrow' = 'wide') {
-	return actorsAtGoals(bots, officePlan(mode)).find((actor) => actor.id === id);
+	return actorsAtGoals(bots, officePlan(mode, bots)).find((actor) => actor.id === id);
 }
 
 describe('office floor', () => {
+	it('gives every bot a desk and keeps unfilled Dispo and Closing desks', () => {
+		const roster = [
+			...seeded,
+			{
+				bot_id: 'rendering-reviewer',
+				name: 'Rendering Reviewer',
+				color: '#A78BFA',
+				status: 'waiting' as const,
+				doing: null,
+				talking_to: null,
+				message: null,
+				updated_at
+			},
+			{
+				bot_id: 'marketing-designer',
+				name: 'Marketing Designer',
+				color: null,
+				status: 'idle' as const,
+				doing: null,
+				talking_to: null,
+				message: null,
+				updated_at
+			},
+			{
+				bot_id: 'future-bot',
+				name: 'Future Bot',
+				color: null,
+				status: 'active' as const,
+				doing: null,
+				talking_to: null,
+				message: null,
+				updated_at
+			}
+		];
+		for (const mode of ['wide', 'narrow'] as const) {
+			const plan = officePlan(mode, roster);
+			expect(plan.stations.find((item) => item.id === 'marketing-designer')?.label).toBe(
+				'Marketing Designer'
+			);
+			expect(plan.stations.find((item) => item.id === 'rendering-reviewer')?.placeholder).toBe(
+				false
+			);
+			expect(plan.stations.find((item) => item.id === 'future-bot')?.label).toBe('Future Bot');
+			expect(plan.stations.find((item) => item.id === 'dispo')?.placeholder).toBe(true);
+			expect(plan.stations.find((item) => item.id === 'closing')?.placeholder).toBe(true);
+			expect(plan.stations.find((item) => item.id === 'jarvis')).toBeTruthy();
+			expect(officePlan(mode).stations.map((item) => item.id)).toEqual([
+				'jarvis',
+				'dispo',
+				'closing'
+			]);
+		}
+	});
+
 	it('seats active and blocked bots and lays idle bots on separate couch slots', () => {
 		for (const mode of ['wide', 'narrow'] as const) {
 			expect(pose(seeded, 'jarvis', mode)?.pose).toBe('sit');
@@ -85,7 +139,7 @@ describe('office floor', () => {
 	});
 
 	it('walks an idle bot back to their desk when they wake up', () => {
-		const plan = officePlan('wide');
+		const plan = officePlan('wide', seeded);
 		const start = actorsAtGoals(seeded, plan);
 		const woken = seeded.map((bot) =>
 			bot.bot_id === 'lead-scout' ? { ...bot, status: 'active' as const } : bot
@@ -103,7 +157,7 @@ describe('office floor', () => {
 
 	it('walks a bot to Jarvis and back along the hallway without crossing walls', () => {
 		for (const mode of ['wide', 'narrow'] as const) {
-			const plan = officePlan(mode);
+			const plan = officePlan(mode, seeded);
 			const talking = seeded.map((bot) =>
 				bot.bot_id === 'seller-followup'
 					? { ...bot, status: 'active' as const, talking_to: 'jarvis', message: 'Need a decision.' }

@@ -55,11 +55,11 @@ export type Goal = {
 
 export const WALK_SPEED = 165;
 
-const WIDE = buildWide();
-const NARROW = buildNarrow();
-
-export function officePlan(mode: 'wide' | 'narrow'): OfficePlan {
-	return mode === 'narrow' ? NARROW : WIDE;
+export function officePlan(
+	mode: 'wide' | 'narrow',
+	bots: { bot_id: string; name: string }[] = []
+): OfficePlan {
+	return mode === 'narrow' ? buildNarrow(bots) : buildWide(bots);
 }
 
 export function goalFor(bot: BotRow, bots: BotRow[], plan: OfficePlan): Goal {
@@ -406,19 +406,73 @@ function hash(id: string): number {
 	return [...id].reduce((sum, char) => sum + char.charCodeAt(0), 0);
 }
 
-function buildWide(): OfficePlan {
+const WIDE_COLS = [
+	{ seatX: 132, deskX: 52, deskW: 160 },
+	{ seatX: 340, deskX: 260, deskW: 160 },
+	{ seatX: 548, deskX: 468, deskW: 160 },
+	{ seatX: 756, deskX: 664, deskW: 176 }
+] as const;
+
+const DESK_ORDER = [
+	'lead-scout',
+	'seller-followup',
+	'deal-analyzer',
+	'research-assistant',
+	'rendering-reviewer',
+	'marketing-designer'
+];
+
+type NamedBot = { bot_id: string; name: string };
+
+function orderedFloorBots(bots: NamedBot[]): NamedBot[] {
+	return bots
+		.filter((bot) => bot.bot_id !== 'jarvis' && bot.bot_id !== 'dispo' && bot.bot_id !== 'closing')
+		.sort((a, b) => {
+			const ai = DESK_ORDER.indexOf(a.bot_id);
+			const bi = DESK_ORDER.indexOf(b.bot_id);
+			if (ai === -1 && bi === -1)
+				return a.name.localeCompare(b.name) || a.bot_id.localeCompare(b.bot_id);
+			if (ai === -1) return 1;
+			if (bi === -1) return -1;
+			return ai - bi;
+		});
+}
+
+function named(bots: NamedBot[], id: string, fallback: string): string {
+	return bots.find((bot) => bot.bot_id === id)?.name || fallback;
+}
+
+function wideSeatY(row: number) {
+	return row === 0 ? 346 : 526 + (row - 1) * 180;
+}
+
+function wideDeskY(row: number) {
+	return row === 0 ? 374 : 534 + (row - 1) * 180;
+}
+
+function wideOpenSlots(count: number): { row: number; col: number }[] {
+	const slots: { row: number; col: number }[] = [];
+	let row = 0;
+	while (slots.length < count) {
+		const cols = row === 1 ? [0, 3] : [0, 1, 2, 3];
+		for (const col of cols) {
+			slots.push({ row, col });
+			if (slots.length >= count) break;
+		}
+		row += 1;
+	}
+	return slots;
+}
+
+function buildWide(bots: NamedBot[]): OfficePlan {
 	const g = graph();
 	const hallY = 300;
 	const aisleX = 30;
-	const lowerY = 526;
 	const couchY = 86;
-	const couchXs = [400, 472, 544, 616, 688];
-	const front = [
-		['lead-scout', 132],
-		['seller-followup', 340],
-		['deal-analyzer', 548],
-		['research-assistant', 756]
-	] as const;
+	const couchXs = [380, 428, 476, 524, 572, 620, 668, 716];
+	const open = orderedFloorBots(bots);
+	const slots = wideOpenSlots(open.length);
+	const maxRow = Math.max(1, ...slots.map((slot) => slot.row), 1);
 	g.add('door-in', 156, 226);
 	g.add('jarvis-seat', 128, 178);
 	g.add('visit-0', 236, 148);
@@ -426,91 +480,116 @@ function buildWide(): OfficePlan {
 	g.link('jarvis-seat', 'door-in');
 	g.link('visit-0', 'door-in');
 	g.link('visit-1', 'door-in');
-	const hallXs = [aisleX, 156, ...front.map(([, x]) => x), ...couchXs];
+	const placed = [
+		...open.map((bot, index) => ({ bot, ...slots[index], reserved: false })),
+		{
+			bot: { bot_id: 'dispo', name: named(bots, 'dispo', 'Dispo') },
+			row: 1,
+			col: 1,
+			reserved: true
+		},
+		{
+			bot: { bot_id: 'closing', name: named(bots, 'closing', 'Closing') },
+			row: 1,
+			col: 2,
+			reserved: true
+		}
+	];
+	const hallXs = [aisleX, 156, ...WIDE_COLS.map((col) => col.seatX), ...couchXs];
 	chain(
 		g,
-		[...new Set(hallXs)].sort((a, b) => a - b).map((x) => [`hall-${x}`, x, hallY])
+		[...new Set(hallXs)].sort((a, b) => a - b).map((x) => [`hall-${x}`, x, hallY] as const)
 	);
 	g.link('door-in', 'hall-156');
-	for (const [id, x] of front) g.add(`seat-${id}`, x, 346);
-	for (const [id, x] of front) g.link(`seat-${id}`, `hall-${x}`);
-	g.add('aisle-lower', aisleX, lowerY);
-	g.add('aisle-front', aisleX, 346);
-	g.link('aisle-lower', 'aisle-front');
-	g.link('aisle-front', `hall-${aisleX}`);
-	g.add('seat-dispo', 340, lowerY);
-	g.add('seat-closing', 548, lowerY);
-	g.link('seat-dispo', 'aisle-lower');
-	g.link('seat-closing', 'seat-dispo');
+	const lowerRows = [
+		...new Set(placed.filter((item) => item.row > 0).map((item) => item.row))
+	].sort((a, b) => a - b);
+	let aislePrev = `hall-${aisleX}`;
+	g.add('aisle-front', aisleX, wideSeatY(0));
+	g.link(aislePrev, 'aisle-front');
+	aislePrev = 'aisle-front';
+	for (const row of lowerRows) {
+		const aisle = `aisle-${row}`;
+		g.add(aisle, aisleX, wideSeatY(row));
+		g.link(aislePrev, aisle);
+		aislePrev = aisle;
+	}
+	for (const item of placed) {
+		const col = WIDE_COLS[item.col];
+		g.add(`seat-${item.bot.bot_id}`, col.seatX, wideSeatY(item.row));
+		if (item.row === 0) g.link(`seat-${item.bot.bot_id}`, `hall-${col.seatX}`);
+		else g.link(`seat-${item.bot.bot_id}`, `aisle-${item.row}`);
+	}
 	couchXs.forEach((x, i) => {
 		g.add(`couch-${i}`, x, couchY);
 		g.link(`couch-${i}`, `hall-${x}`);
 	});
+	const height = Math.max(640, wideDeskY(maxRow) + 120);
+	const stations = [
+		station(
+			'jarvis',
+			named(bots, 'jarvis', 'Jarvis'),
+			false,
+			{ x: 128, y: 178 },
+			{
+				x: 62,
+				y: 74,
+				w: 120,
+				h: 52
+			}
+		),
+		...placed.map((item) => {
+			const col = WIDE_COLS[item.col];
+			const hired = bots.some((bot) => bot.bot_id === item.bot.bot_id);
+			return station(
+				item.bot.bot_id,
+				item.bot.name,
+				item.reserved && !hired,
+				{ x: col.seatX, y: wideSeatY(item.row) },
+				{ x: col.deskX, y: wideDeskY(item.row), w: col.deskW, h: 64 }
+			);
+		})
+	];
 	return {
 		id: 'wide',
 		width: 1000,
-		height: 640,
-		building: { x: 16, y: 16, w: 968, h: 608 },
+		height,
+		building: { x: 16, y: 16, w: 968, h: height - 32 },
 		jarvisRoom: { x: 44, y: 28, w: 268, h: 232 },
 		door: { x: 124, w: 64, wallY: 260 },
 		lounge: { x: 312, y: 28, w: 656, h: 232 },
 		hall: { x: 28, y: 268, w: 944, h: 64 },
-		couch: { x: 368, y: 52, w: 360, h: 70 },
+		couch: { x: 360, y: 48, w: 400, h: 74 },
 		couchSlots: couchXs.map((x) => ({ x, y: couchY })),
-		coffee: { x: 790, y: 150, w: 124, h: 48 },
+		coffee: { x: 820, y: 158, w: 110, h: 46 },
 		plant: { x: 912, y: 58 },
-		cabinet: { x: 36, y: 548, w: 42, h: 58 },
+		cabinet: null,
 		cooler: { x: 908, y: 530, w: 34, h: 64 },
 		jarvisVisitors: [
 			{ x: 236, y: 148 },
 			{ x: 250, y: 196 }
 		],
-		stations: [
-			station('jarvis', 'Jarvis', false, { x: 128, y: 178 }, { x: 62, y: 74, w: 120, h: 52 }),
-			station(
-				'lead-scout',
-				'Lead Scout',
-				false,
-				{ x: 132, y: 346 },
-				{ x: 52, y: 374, w: 160, h: 64 }
-			),
-			station(
-				'seller-followup',
-				'Seller Follow-up',
-				false,
-				{ x: 340, y: 346 },
-				{ x: 260, y: 374, w: 160, h: 64 }
-			),
-			station(
-				'deal-analyzer',
-				'Deal Analyzer',
-				false,
-				{ x: 548, y: 346 },
-				{ x: 468, y: 374, w: 160, h: 64 }
-			),
-			station(
-				'research-assistant',
-				'Research Assistant',
-				false,
-				{ x: 756, y: 346 },
-				{ x: 664, y: 374, w: 176, h: 64 }
-			),
-			station('dispo', 'Dispo', true, { x: 340, y: lowerY }, { x: 260, y: 534, w: 160, h: 64 }),
-			station('closing', 'Closing', true, { x: 548, y: lowerY }, { x: 468, y: 534, w: 160, h: 64 })
-		],
+		stations,
 		nodes: g.nodes,
 		neighbors: g.neighbors
 	};
 }
 
-function buildNarrow(): OfficePlan {
+function buildNarrow(bots: NamedBot[]): OfficePlan {
 	const g = graph();
 	const spineX = 200;
-	const seatYs = [528, 678, 828];
 	const leftX = 96;
 	const rightX = 300;
 	const couchY = 276;
-	const couchXs = [72, 132, 200, 268, 328];
+	const couchXs = [48, 100, 152, 200, 256, 312];
+	const open = orderedFloorBots(bots);
+	const rows: NamedBot[][] = [];
+	for (let i = 0; i < open.length; i += 2) rows.push(open.slice(i, i + 2));
+	const reserved: NamedBot[] = [
+		{ bot_id: 'dispo', name: named(bots, 'dispo', 'Dispo') },
+		{ bot_id: 'closing', name: named(bots, 'closing', 'Closing') }
+	];
+	rows.push(reserved);
 	g.add('jarvis-seat', 108, 142);
 	g.add('door-in', 200, 156);
 	g.add('visit-0', 292, 92);
@@ -526,35 +605,61 @@ function buildNarrow(): OfficePlan {
 	g.link('spine-couch', 'hall-b');
 	couchXs.forEach((x, i) => g.add(`couch-${i}`, x, couchY));
 	for (let i = 0; i < couchXs.length - 1; i += 1) g.link(`couch-${i}`, `couch-${i + 1}`);
-	g.link('couch-2', 'spine-couch');
-	const ids = [
-		['lead-scout', 'seller-followup'],
-		['deal-analyzer', 'research-assistant'],
-		['dispo', 'closing']
-	] as const;
+	g.link('couch-3', 'spine-couch');
 	let previous = 'hall-b';
-	ids.forEach((pair, row) => {
-		const y = seatYs[row];
+	const seatY = (row: number) => 520 + row * 140;
+	const deskY = (row: number) => seatY(row) + 10;
+	rows.forEach((pair, row) => {
+		const y = seatY(row);
 		const spine = `spine-${row}`;
 		g.add(spine, spineX, y);
 		g.link(previous, spine);
-		g.add(`seat-${pair[0]}`, leftX, y);
-		g.add(`seat-${pair[1]}`, rightX, y);
-		g.link(`seat-${pair[0]}`, spine);
-		g.link(`seat-${pair[1]}`, spine);
+		pair.forEach((bot, side) => {
+			g.add(`seat-${bot.bot_id}`, side === 0 ? leftX : rightX, y);
+			g.link(`seat-${bot.bot_id}`, spine);
+		});
 		previous = spine;
 	});
+	const lastDesk = deskY(rows.length - 1) + 80;
+	const height = Math.max(980, lastDesk + 40);
 	const desk = (x: number, y: number): Rect => ({ x, y, w: 156, h: 64 });
+	const stations = [
+		station(
+			'jarvis',
+			named(bots, 'jarvis', 'Jarvis'),
+			false,
+			{ x: 108, y: 142 },
+			{
+				x: 48,
+				y: 46,
+				w: 118,
+				h: 50
+			}
+		),
+		...rows.flatMap((pair, row) =>
+			pair.map((bot, side) => {
+				const hired = bots.some((item) => item.bot_id === bot.bot_id);
+				const reserved = bot.bot_id === 'dispo' || bot.bot_id === 'closing';
+				return station(
+					bot.bot_id,
+					bot.name,
+					reserved && !hired,
+					{ x: side === 0 ? leftX : rightX, y: seatY(row) },
+					desk(side === 0 ? 20 : 224, deskY(row))
+				);
+			})
+		)
+	];
 	return {
 		id: 'narrow',
 		width: 400,
-		height: 980,
-		building: { x: 10, y: 10, w: 380, h: 960 },
+		height,
+		building: { x: 10, y: 10, w: 380, h: height - 20 },
 		jarvisRoom: { x: 16, y: 16, w: 368, h: 168 },
 		door: { x: 168, w: 64, wallY: 184 },
 		lounge: { x: 16, y: 230, w: 368, h: 200 },
 		hall: { x: 16, y: 430, w: 368, h: 52 },
-		couch: { x: 36, y: 246, w: 328, h: 58 },
+		couch: { x: 28, y: 246, w: 340, h: 58 },
 		couchSlots: couchXs.map((x) => ({ x, y: couchY })),
 		coffee: { x: 28, y: 336, w: 108, h: 40 },
 		plant: { x: 336, y: 328 },
@@ -564,27 +669,7 @@ function buildNarrow(): OfficePlan {
 			{ x: 292, y: 92 },
 			{ x: 292, y: 136 }
 		],
-		stations: [
-			station('jarvis', 'Jarvis', false, { x: 108, y: 142 }, { x: 48, y: 46, w: 118, h: 50 }),
-			station('lead-scout', 'Lead Scout', false, { x: leftX, y: seatYs[0] }, desk(20, 536)),
-			station(
-				'seller-followup',
-				'Seller Follow-up',
-				false,
-				{ x: rightX, y: seatYs[0] },
-				desk(224, 536)
-			),
-			station('deal-analyzer', 'Deal Analyzer', false, { x: leftX, y: seatYs[1] }, desk(20, 686)),
-			station(
-				'research-assistant',
-				'Research Assistant',
-				false,
-				{ x: rightX, y: seatYs[1] },
-				desk(224, 686)
-			),
-			station('dispo', 'Dispo', true, { x: leftX, y: seatYs[2] }, desk(20, 836)),
-			station('closing', 'Closing', true, { x: rightX, y: seatYs[2] }, desk(224, 836))
-		],
+		stations,
 		nodes: g.nodes,
 		neighbors: g.neighbors
 	};

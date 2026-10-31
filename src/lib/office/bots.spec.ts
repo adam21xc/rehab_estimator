@@ -6,6 +6,7 @@ import {
 	explainOfficeError,
 	officeSummary,
 	parseBotRow,
+	reconcileBots,
 	relativeTime,
 	waitingOnAdam,
 	wrapMessage,
@@ -114,6 +115,30 @@ describe('bot status rows', () => {
 		expect(summary).toContain('Jarvis is active');
 		expect(summary).toContain('Closing is not hired yet');
 		expect(summary).not.toContain('Dispo and Closing');
+	});
+
+	it('keeps a newer realtime row when a poll is stale and drops deleted rows', () => {
+		const older = bot({
+			bot_id: 'jarvis',
+			name: 'Jarvis',
+			status: 'idle',
+			updated_at: '2026-10-30T14:00:00.000Z'
+		});
+		const newer = bot({
+			bot_id: 'jarvis',
+			name: 'Jarvis',
+			status: 'active',
+			updated_at: '2026-10-30T15:00:00.000Z'
+		});
+		const started = Date.parse('2026-10-30T14:50:00.000Z');
+		expect(reconcileBots([newer], [older], started)).toEqual([newer]);
+		const gone = bot({
+			bot_id: 'lead-scout',
+			name: 'Lead Scout',
+			status: 'idle',
+			updated_at: '2026-10-30T14:00:00.000Z'
+		});
+		expect(reconcileBots([gone], [], started)).toEqual([]);
 	});
 
 	it('points a missing-table error at the migration', () => {

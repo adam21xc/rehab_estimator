@@ -74,6 +74,6 @@ describe('bot office board', () => {
 		await expect
 			.element(page.getByText('Needs Full Disk Access on Mac mini').first())
 			.toBeVisible();
-		await expect.element(page.getByText('5 minutes ago').first()).toBeVisible();
+		await expect.element(page.getByText('updated 5 minutes ago').first()).toBeVisible();
 	});
 });
