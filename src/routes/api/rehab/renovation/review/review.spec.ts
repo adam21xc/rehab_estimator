@@ -129,3 +129,78 @@ it('excludes archived pairs from all active images and exposes a separate archiv
 	).json();
 	expect(archive.items.map((r: any) => r.status)).toEqual(['archived']);
 });
+
+it('lists flagged and held properties and leaves out a property that is only waiting on an image', async () => {
+	const pair = {
+		before_path: 'renovation/prop_12/b.jpg',
+		renovated_path: 'renovation/prop_12/a.jpg'
+	};
+	const flaggedFacts = {
+		full_address: 'A Flagged St',
+		renovation_image_pair: pair,
+		renovation_image_review: {
+			version: reviewPair('prop_12', { renovation_image_pair: pair })!.version,
+			status: 'flagged',
+			note: 'NOT USABLE: No usable front photo after an extensive search.'
+		}
+	};
+	const chain: any = {};
+	for (const method of ['select', 'order']) chain[method] = () => chain;
+	chain.or = vi.fn(() => chain);
+	chain.range = async () => ({
+		data: [
+			{ id: 'prop_12', facts: flaggedFacts },
+			{
+				id: 'prop_4',
+				facts: {
+					full_address: 'B Held Ave',
+					renovation_batch: { status: 'needs_review', reason: 'Source unavailable or invalid JPEG' }
+				}
+			},
+			{
+				id: 'prop_9',
+				facts: {
+					full_address: 'C Queue St',
+					renovation_dashboard_trial: { status: 'generating' },
+					renovation_batch: { status: 'queued' }
+				}
+			},
+			{
+				id: 'prop_8',
+				facts: {
+					full_address: 'D Approved St',
+					renovation_image_pair: {
+						before_path: 'renovation/prop_8/b.jpg',
+						renovated_path: 'renovation/prop_8/a.jpg'
+					},
+					renovation_image_review: {
+						version: reviewPair('prop_8', {
+							renovation_image_pair: {
+								before_path: 'renovation/prop_8/b.jpg',
+								renovated_path: 'renovation/prop_8/a.jpg'
+							}
+						})!.version,
+						status: 'approved',
+						note: 'Looks right'
+					}
+				}
+			}
+		],
+		error: null
+	});
+	const sign = vi.fn();
+	m.db.mockReturnValue({
+		from: () => chain,
+		storage: { from: () => ({ createSignedUrls: sign }) }
+	});
+	const body = await (await GET({ url: new URL('http://localhost/?status=manual') } as any)).json();
+	expect(body.counts.manual).toBe(2);
+	expect(body.items.map((row: { address: string }) => row.address)).toEqual([
+		'A Flagged St',
+		'B Held Ave'
+	]);
+	expect(body.items[0].kind).toBe('not_usable');
+	expect(body.items[1].hasImages).toBe(false);
+	expect(sign).not.toHaveBeenCalled();
+	expect(chain.or).toHaveBeenCalledWith(expect.stringContaining('needs_review'));
+});
