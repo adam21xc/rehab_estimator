@@ -1,6 +1,7 @@
 <script lang="ts">
 	let { name }: { name: string } = $props();
 	const paths: Record<string, string> = {
+		'Needs your review': 'M5 3v18M5 4h12l-2 4 2 4H5',
 		'Lead enrichment': 'M5 3h14v18H5zM8 7h8M8 11h8M8 16l2 2 5-5',
 		'Sales intelligence': 'M4 19V11h4v8M10 19V5h4v14M16 19V8h4v11M3 19h18',
 		'Accela records': 'M5 3h14v18H5zM8 7h8M8 11h8M8 15h5',

@@ -45,10 +45,10 @@
 			title: 'Plan & renovate',
 			items: [
 				{
-					label: 'Postcard image review',
+					label: 'Needs your review',
 					path: '/renovation-review',
-					query: '',
-					href: resolve('/renovation-review'),
+					query: '?status=manual',
+					href: `${resolve('/renovation-review')}?status=manual`,
 					color: '#42c9b4'
 				},
 				{
@@ -109,6 +109,7 @@
 	];
 	function active(item: { path: string; query: string }) {
 		if (item.path === '/sales') return page.url.pathname.startsWith('/sales');
+		if (item.path === '/renovation-review') return page.url.pathname === '/renovation-review';
 		if (page.url.pathname !== item.path) return false;
 		if (!item.query) return true;
 		const [key, value] = item.query.slice(1).split('=');

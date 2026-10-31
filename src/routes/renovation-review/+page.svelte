@@ -1,10 +1,13 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
+	import { afterNavigate, goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import { page as appPage } from '$app/state';
 	import EmailSignIn from '$lib/components/EmailSignIn.svelte';
 	type Row = {
 		id: string;
 		address: string;
-		version: string;
+		version: string | null;
 		status: string;
 		note: string;
 		hold: string | null;
@@ -13,13 +16,46 @@
 		imageError: boolean;
 		loadedBefore?: boolean;
 		loadedAfter?: boolean;
+		reasons?: string[];
+		hasImages?: boolean;
+		kind?: string;
 	};
+	const FILTERS = ['manual', 'pending', 'approved', 'flagged', 'archived', 'all'];
+	const kindLabel: Record<string, string> = {
+		not_usable: 'NOT USABLE',
+		flagged: 'Flagged',
+		pending: 'Awaiting review',
+		held: 'Held'
+	};
+	function readStatus() {
+		const value = appPage.url.searchParams.get('status');
+		return value && FILTERS.includes(value) ? value : 'manual';
+	}
+	function listHref(nextStatus: string, nextPage = 1, nextQ = '', nextId = '') {
+		const query = [
+			`status=${encodeURIComponent(nextStatus)}`,
+			nextPage > 1 ? `page=${nextPage}` : '',
+			nextQ.trim() ? `q=${encodeURIComponent(nextQ.trim())}` : '',
+			nextId ? `id=${encodeURIComponent(nextId)}` : ''
+		]
+			.filter(Boolean)
+			.join('&');
+		return `${resolve('/renovation-review')}?${query}`;
+	}
+	function cardHref(row: Row) {
+		const next =
+			row.status === 'pending' || row.status === 'flagged' || row.status === 'approved'
+				? row.status
+				: 'all';
+		return listHref(next, 1, '', row.id);
+	}
 	let rows = $state<Row[]>([]),
-		counts = $state({ all: 0, pending: 0, approved: 0, flagged: 0, archived: 0 }),
-		page = $state(1),
+		counts = $state({ all: 0, pending: 0, approved: 0, flagged: 0, archived: 0, manual: 0 }),
+		page = $state(Math.max(1, Number(appPage.url.searchParams.get('page')) || 1)),
 		pages = $state(1),
-		q = $state(''),
-		status = $state('pending'),
+		q = $state(appPage.url.searchParams.get('q') || ''),
+		status = $state(readStatus()),
+		focusId = $state(appPage.url.searchParams.get('id') || ''),
 		busy = $state(false),
 		saving = $state(''),
 		problem = $state(''),
@@ -32,7 +68,12 @@
 		problem = '';
 		try {
 			const r = await fetch(
-				`/api/rehab/renovation/review?${new URLSearchParams({ q, status, page: String(next) })}`
+				`/api/rehab/renovation/review?${new URLSearchParams({
+					q,
+					status,
+					page: String(next),
+					...(focusId ? { id: focusId } : {})
+				})}`
 			);
 			const data = await r.json();
 			if (request !== requestId) return;
@@ -73,43 +114,80 @@
 			saving = '';
 		}
 	}
-	onMount(() => {
-		void load();
+	async function go(href: string) {
+		const current = `${appPage.url.pathname}${appPage.url.search}`;
+		if (current === href) {
+			await load(Math.max(1, Number(appPage.url.searchParams.get('page')) || 1));
+			return;
+		}
+		// listHref() resolves /renovation-review, then adds the filter query.
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
+		await goto(href, { replaceState: true, keepFocus: true, noScroll: true });
+	}
+	afterNavigate(() => {
+		if (!browser) return;
+		status = readStatus();
+		focusId = appPage.url.searchParams.get('id') || '';
+		q = appPage.url.searchParams.get('q') || '';
+		void load(Math.max(1, Number(appPage.url.searchParams.get('page')) || 1));
 	});
 </script>
 
-<svelte:head><title>Postcard image review · Apex</title></svelte:head>
+<svelte:head
+	><title>{status === 'manual' ? 'Needs your review' : 'Postcard image review'} · Apex</title
+	></svelte:head
+>
 <main>
 	<header>
 		<p class="eyebrow">POSTCARD PREPARATION</p>
-		<h1>Before & after review</h1>
+		<h1>{status === 'manual' ? 'Needs your review' : 'Before & after review'}</h1>
 		<p>
-			Review each property’s current photo and AI renovation concept. Approving images does not send
-			or schedule a postcard.
+			{#if status === 'manual'}
+				These properties still need a decision from you. Flagged renderings stay on this list,
+				including notes that start with NOT USABLE. A property hold stays here too. A property whose
+				only outstanding item is that its rehab image has not been generated yet is left off.
+			{:else}
+				Review each property’s current photo and AI renovation concept. Approving images does not
+				send or schedule a postcard.
+			{/if}
 		</p>
 	</header>
 	{#if !signedIn}<EmailSignIn onSignedIn={() => load()} />{:else}
 		<div class="stats">
-			<span><b>{counts.all}</b> active image pairs</span><span
-				><b>{counts.pending}</b> awaiting review</span
-			><span><b>{counts.approved}</b> approved</span><span><b>{counts.flagged}</b> flagged</span
-			><span><b>{counts.archived}</b> archived</span>
+			<span><b>{counts.manual}</b> need your review</span><span
+				><b>{counts.all}</b> active image pairs</span
+			><span><b>{counts.pending}</b> awaiting review</span><span
+				><b>{counts.approved}</b> approved</span
+			><span><b>{counts.flagged}</b> flagged</span><span><b>{counts.archived}</b> archived</span>
 		</div>
 		<form
 			onsubmit={(e) => {
 				e.preventDefault();
-				void load(1);
+				focusId = '';
+				void go(listHref(status, 1, q));
 			}}
 		>
-			<label>Property address<input bind:value={q} placeholder="Search an address" /></label><label
-				>Review status<select bind:value={status} onchange={() => load(1)}
-					><option value="all">All active images</option><option value="pending"
-						>Awaiting review</option
-					><option value="approved">Approved</option><option value="flagged">Flagged</option><option
-						value="archived">Archived</option
+			<label>Property address<input bind:value={q} placeholder="Search an address or note" /></label
+			><label
+				>Review status<select
+					bind:value={status}
+					onchange={(event) => {
+						const next = event.currentTarget.value;
+						focusId = '';
+						void go(listHref(next, 1, q));
+					}}
+					><option value="manual">Needs your review</option><option value="all"
+						>All active images</option
+					><option value="pending">Awaiting review</option><option value="approved">Approved</option
+					><option value="flagged">Flagged</option><option value="archived">Archived</option
 					></select
 				></label
-			><button disabled={busy || !!saving}>Search / refresh</button>
+			><button
+				disabled={busy || !!saving}
+				onclick={() => {
+					focusId = '';
+				}}>Search / refresh</button
+			>
 		</form>
 		{#if problem}<p class="error" role="alert">{problem}</p>{/if}{#if notice}<p
 				class="notice"
@@ -118,92 +196,139 @@
 				{notice}
 			</p>{/if}
 		<p class="hint">
-			New image pairs appear as the batch finishes. Refresh to load them. Click either photo to view
-			it full size. Archive unusable pairs to remove them from this queue without deleting the
-			property or images. Restore them from the Archived filter.
+			{#if status === 'manual'}
+				Search by address or by the review note. Open a rendering to approve, flag, or archive it.
+				Holds without an image are not still waiting in the generator.
+			{:else}
+				New image pairs appear as the batch finishes. Refresh to load them. Click either photo to
+				view it full size. Archive unusable pairs to remove them from this queue without deleting
+				the property or images. Restore them from the Archived filter.
+			{/if}
 		</p>
-		{#if busy}<p role="status">Loading image pairs…</p>{/if}
-		{#each rows as row (row.id)}
-			<article aria-label={row.address}>
-				<div class="title">
-					<h2>{row.address}</h2>
-					<span
-						class="badge"
-						class:approved={row.status === 'approved'}
-						class:flagged={row.status === 'flagged'}
-						>{row.status === 'pending' ? 'Awaiting review' : row.status}</span
-					>
-				</div>
-				{#if row.hold}<p class="error">Property match needs review: {row.hold}</p>{/if}
-				<div class="pair">
-					{#each [{ label: 'Before · current property', url: row.beforeUrl }, { label: 'After · AI renovation concept', url: row.afterUrl }] as image}<figure
-						>
-							<figcaption>{image.label}</figcaption>
-							{#if image.url}<a href={image.url} target="_blank" rel="noreferrer"
-									><img
-										src={image.url}
-										alt={`${image.label}: ${row.address}`}
-										loading="lazy"
-										onload={() => {
-											if (image.label.startsWith('Before')) row.loadedBefore = true;
-											else row.loadedAfter = true;
-										}}
-										onerror={() => {
-											row.imageError = true;
-										}}
-									/></a
-								>{:else}<p>Image unavailable. Refresh to try again.</p>{/if}
-						</figure>{/each}
-				</div>
-				{#if row.imageError}<p class="error">
-						An image could not be loaded. Refresh before approving this pair.
-					</p>{/if}
-				<label class="notes"
-					>Review note<textarea
-						bind:value={row.note}
-						maxlength="2000"
-						placeholder="Wrong house, unrealistic changes, poor framing…"
-						rows="2"
-					></textarea></label
+		{#if focusId}<p>
+				<!-- listHref() resolves /renovation-review, then adds the filter query. -->
+				<!-- eslint-disable svelte/no-navigation-without-resolve -->
+				<a href={listHref('manual')}
+					>{status === 'manual'
+						? 'Show every property that needs review'
+						: 'Back to needs your review'}</a
 				>
-				<div class="actions">
-					<button
-						class="approve"
-						disabled={busy ||
-							!!saving ||
-							row.status === 'archived' ||
-							!!row.hold ||
-							row.imageError ||
-							!row.loadedBefore ||
-							!row.loadedAfter}
-						onclick={() => save(row, 'approved')}>Approve images</button
-					><button
-						class="flag"
-						disabled={busy || !!saving || row.status === 'archived' || !row.note.trim()}
-						onclick={() => save(row, 'flagged')}>Flag for review</button
-					><button disabled={busy || !!saving} onclick={() => save(row, row.status)}
-						>Save note</button
-					>{#if row.status !== 'archived'}<button
-							class="archive"
-							disabled={busy || !!saving}
-							onclick={() => save(row, 'archived')}>Archive images</button
-						>{/if}{#if row.status !== 'pending'}<button
-							disabled={busy || !!saving}
-							onclick={() => save(row, 'pending')}
-							>{row.status === 'archived' ? 'Restore to review' : 'Return to pending'}</button
-						>{/if}{#if saving === row.id}<span role="status">Saving…</span>{/if}
-				</div>
-			</article>
-		{:else}{#if !busy}<p class="empty">
-					No image pairs match this filter. Try “All active images” or refresh as generation
-					progresses.
-				</p>{/if}{/each}
+				<!-- eslint-enable svelte/no-navigation-without-resolve -->
+			</p>{/if}
+		{#if busy}<p role="status">Loading review queue…</p>{/if}
+		{#if status === 'manual'}
+			{#each rows as row (row.id)}
+				<article id={'review-' + row.id} aria-label={row.address}>
+					<div class="title">
+						<h2>{row.address}</h2>
+						<span
+							class="badge"
+							class:flagged={row.kind === 'flagged' || row.kind === 'not_usable'}
+							class:held={row.kind === 'held'}>{kindLabel[row.kind || ''] || row.status}</span
+						>
+					</div>
+					<ul class="reasons">
+						{#each row.reasons || [] as reason, index (row.id + '-' + index)}<li>
+								{reason}
+							</li>{/each}
+					</ul>
+					{#if row.hasImages}<!-- cardHref() resolves /renovation-review, then adds the filter query. -->
+						<!-- eslint-disable svelte/no-navigation-without-resolve -->
+						<a class="card-link" href={cardHref(row)}>Open rendering</a>
+						<!-- eslint-enable svelte/no-navigation-without-resolve -->{:else}<p class="hint">
+							No before-and-after card yet. This is a hold, not an image still waiting to generate.
+						</p>{/if}
+				</article>
+			{:else}{#if !busy}<p class="empty">
+						No properties need your review. Properties that are only waiting for an image to be
+						generated are not listed here.
+					</p>{/if}{/each}
+		{:else}
+			{#each rows as row (row.id)}
+				<article aria-label={row.address}>
+					<div class="title">
+						<h2>{row.address}</h2>
+						<span
+							class="badge"
+							class:approved={row.status === 'approved'}
+							class:flagged={row.status === 'flagged'}
+							>{row.status === 'pending' ? 'Awaiting review' : row.status}</span
+						>
+					</div>
+					{#if row.hold}<p class="error">Property match needs review: {row.hold}</p>{/if}
+					<div class="pair">
+						{#each [{ label: 'Before · current property', url: row.beforeUrl }, { label: 'After · AI renovation concept', url: row.afterUrl }] as image (image.label)}<figure
+							>
+								<figcaption>{image.label}</figcaption>
+								{#if image.url}<!-- Signed storage URL, not an app route. -->
+									<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
+									<a href={image.url} target="_blank" rel="noreferrer"
+										><img
+											src={image.url}
+											alt={`${image.label}: ${row.address}`}
+											loading="lazy"
+											onload={() => {
+												if (image.label.startsWith('Before')) row.loadedBefore = true;
+												else row.loadedAfter = true;
+											}}
+											onerror={() => {
+												row.imageError = true;
+											}}
+										/></a
+									>{:else}<p>Image unavailable. Refresh to try again.</p>{/if}
+							</figure>{/each}
+					</div>
+					{#if row.imageError}<p class="error">
+							An image could not be loaded. Refresh before approving this pair.
+						</p>{/if}
+					<label class="notes"
+						>Review note<textarea
+							bind:value={row.note}
+							maxlength="2000"
+							placeholder="Wrong house, unrealistic changes, poor framing…"
+							rows="2"
+						></textarea></label
+					>
+					<div class="actions">
+						<button
+							class="approve"
+							disabled={busy ||
+								!!saving ||
+								row.status === 'archived' ||
+								!!row.hold ||
+								row.imageError ||
+								!row.loadedBefore ||
+								!row.loadedAfter}
+							onclick={() => save(row, 'approved')}>Approve images</button
+						><button
+							class="flag"
+							disabled={busy || !!saving || row.status === 'archived' || !row.note.trim()}
+							onclick={() => save(row, 'flagged')}>Flag for review</button
+						><button disabled={busy || !!saving} onclick={() => save(row, row.status)}
+							>Save note</button
+						>{#if row.status !== 'archived'}<button
+								class="archive"
+								disabled={busy || !!saving}
+								onclick={() => save(row, 'archived')}>Archive images</button
+							>{/if}{#if row.status !== 'pending'}<button
+								disabled={busy || !!saving}
+								onclick={() => save(row, 'pending')}
+								>{row.status === 'archived' ? 'Restore to review' : 'Return to pending'}</button
+							>{/if}{#if saving === row.id}<span role="status">Saving…</span>{/if}
+					</div>
+				</article>
+			{:else}{#if !busy}<p class="empty">
+						No image pairs match this filter. Try “All active images” or refresh as generation
+						progresses.
+					</p>{/if}{/each}
+		{/if}
 		<nav aria-label="Review pages">
-			<button disabled={page <= 1 || busy || !!saving} onclick={() => load(page - 1)}
-				>Previous</button
+			<button
+				disabled={page <= 1 || busy || !!saving}
+				onclick={() => go(listHref(status, page - 1, q, focusId))}>Previous</button
 			><span>Page {page} of {pages}</span><button
 				disabled={page >= pages || busy || !!saving}
-				onclick={() => load(page + 1)}>Next</button
+				onclick={() => go(listHref(status, page + 1, q, focusId))}>Next</button
 			>
 		</nav>
 	{/if}
@@ -379,6 +504,19 @@
 	.empty {
 		padding: 40px;
 		text-align: center;
+	}
+	.reasons {
+		margin: 12px 0;
+		padding-left: 1.2rem;
+		color: #3d5360;
+	}
+	.badge.held {
+		background: #fff3d6;
+		color: #6a4b00;
+	}
+	.card-link {
+		font-weight: 700;
+		color: #14624c;
 	}
 	@media (max-width: 600px) {
 		main {
